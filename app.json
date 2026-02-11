@@ -62,10 +62,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "saimo-tv-v2"
-      }
+      "router": {}
     }
   }
 }
