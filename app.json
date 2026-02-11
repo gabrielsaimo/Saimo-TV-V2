@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Saimo TV",
+    "slug": "saimo-tv-v2",
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "icon": "./assets/images/saimo_tv_logo.png",
+    "scheme": "saimotv",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/saimo_tv_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0F"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/saimo_tv_logo.png",
+        "backgroundColor": "#0A0A0F"
+      },
+      "package": "com.saimo.tvbox",
+      "usesCleartextTraffic": true,
+      "configChanges": "keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize",
+      "permissions": [
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/saimo_tv_logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "LANDSCAPE"
+        }
+      ],
+      "./plugins/withCleartextTraffic",
+      "./plugins/withAndroidTV",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "saimo-tv-v2"
+      }
+    }
+  }
+}
