@@ -7,7 +7,6 @@ import {
   StatusBar,
   Pressable,
   ActivityIndicator,
-  Dimensions,
   FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -15,12 +14,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import { Colors, Typography, Spacing, BorderRadius, scale, SCREEN } from '../../constants/Colors';
 import { getMediaById } from '../../services/mediaService';
 import { useMediaStore } from '../../stores/mediaStore';
 import type { MediaItem, CastMember } from '../../types';
-
-const { width, height } = Dimensions.get('window');
 
 const getCertColor = (cert?: string) => {
   if (!cert) return Colors.textSecondary;
@@ -269,7 +266,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
-  hero: { height: height * 0.55, position: 'relative' },
+  hero: { height: SCREEN.height * 0.55, position: 'relative' },
   backdrop: { width: '100%', height: '100%' },
   heroGradient: { ...StyleSheet.absoluteFillObject },
   headerButton: {
@@ -280,7 +277,7 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 0, left: Spacing.xl, right: Spacing.xl,
     flexDirection: 'row', gap: Spacing.lg, alignItems: 'flex-end', paddingBottom: Spacing.xl,
   },
-  poster: { width: 140, height: 210, borderRadius: BorderRadius.lg, backgroundColor: Colors.surface },
+  poster: { width: scale(140), height: scale(210), borderRadius: BorderRadius.lg, backgroundColor: Colors.surface },
   heroInfo: { flex: 1, paddingBottom: Spacing.sm },
   title: { color: Colors.text, fontSize: Typography.h1.fontSize, fontWeight: '700', lineHeight: 48 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.md },
@@ -306,9 +303,9 @@ const styles = StyleSheet.create({
   section: { marginTop: Spacing.xl },
   sectionTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700', paddingHorizontal: Spacing.xl, marginBottom: Spacing.md },
   overview: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, lineHeight: 28, paddingHorizontal: Spacing.xl },
-  castCard: { width: 100, marginRight: Spacing.lg, alignItems: 'center' },
+  castCard: { width: scale(100), marginRight: Spacing.lg, alignItems: 'center' },
   castCardFocused: { borderWidth: 2, borderColor: Colors.primary, borderRadius: BorderRadius.lg, padding: 4 },
-  castPhoto: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.surface },
+  castPhoto: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.surface },
   castName: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
   castCharacter: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center' },
   errorText: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, marginTop: Spacing.lg },

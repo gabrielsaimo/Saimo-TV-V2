@@ -3,16 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   Pressable,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import { Colors, Typography, Spacing, BorderRadius, TV, scale } from '../../constants/Colors';
 import { loadInitialCategories, getMediaByActor } from '../../services/mediaService';
 import type { MediaItem, CastMember } from '../../types';
 import TVMediaCard from '../../components/TVMediaCard';
@@ -57,47 +57,54 @@ export default function TVActorScreen() {
     <View style={styles.container}>
       <StatusBar hidden />
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 60 }}
+      <FlatList
+        data={filmography}
+        keyExtractor={(item) => item.id}
+        numColumns={TV.mediaColumns}
+        contentContainerStyle={styles.grid}
+        columnWrapperStyle={styles.row}
         showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable
-            style={({ focused }) => [styles.backButton, focused && styles.btnFocused]}
-            onPress={handleBack}
-          >
-            <Ionicons name="arrow-back" size={28} color={Colors.text} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Ator</Text>
-          <View style={{ width: 52 }} />
-        </View>
+        renderItem={({ item }) => (
+          <TVMediaCard item={item} size="small" />
+        )}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews
+        ListHeaderComponent={
+          <>
+            {/* Header */}
+            <View style={styles.header}>
+              <Pressable
+                style={({ focused }) => [styles.backButton, focused && styles.btnFocused]}
+                onPress={handleBack}
+              >
+                <Ionicons name="arrow-back" size={28} color={Colors.text} />
+              </Pressable>
+              <Text style={styles.headerTitle}>Ator</Text>
+              <View style={{ width: 52 }} />
+            </View>
 
-        {/* Actor Profile */}
-        <View style={styles.profile}>
-          <Image
-            source={{ uri: actor?.photo || '' }}
-            style={styles.photo}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-          <Text style={styles.actorName}>{actor?.name || name || 'Ator'}</Text>
-          <Text style={styles.filmCount}>
-            {filmography.length} título{filmography.length !== 1 ? 's' : ''} no catálogo
-          </Text>
-        </View>
+            {/* Actor Profile */}
+            <View style={styles.profile}>
+              <Image
+                source={{ uri: actor?.photo || '' }}
+                style={styles.photo}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+              <Text style={styles.actorName}>{actor?.name || name || 'Ator'}</Text>
+              <Text style={styles.filmCount}>
+                {filmography.length} título{filmography.length !== 1 ? 's' : ''} no catálogo
+              </Text>
+            </View>
 
-        {/* Filmography */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Filmografia</Text>
-          <View style={styles.grid}>
-            {filmography.map((item) => (
-              <TVMediaCard key={item.id} item={item} size="small" />
-            ))}
-          </View>
-        </View>
-      </ScrollView>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Filmografia</Text>
+            </View>
+          </>
+        }
+      />
     </View>
   );
 }
@@ -105,7 +112,6 @@ export default function TVActorScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
-  scroll: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.md,
@@ -114,10 +120,11 @@ const styles = StyleSheet.create({
   btnFocused: { borderWidth: 3, borderColor: Colors.primary, borderRadius: BorderRadius.full },
   headerTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '600' },
   profile: { alignItems: 'center', paddingVertical: Spacing.xxl },
-  photo: { width: 160, height: 160, borderRadius: 80, backgroundColor: Colors.surface },
+  photo: { width: scale(160), height: scale(160), borderRadius: scale(80), backgroundColor: Colors.surface },
   actorName: { color: Colors.text, fontSize: Typography.h1.fontSize, fontWeight: '700', marginTop: Spacing.lg, textAlign: 'center' },
   filmCount: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, marginTop: Spacing.sm },
   section: { marginTop: Spacing.xl, paddingHorizontal: Spacing.xl },
   sectionTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700', marginBottom: Spacing.lg },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
+  grid: { paddingHorizontal: Spacing.xl, paddingBottom: 80 },
+  row: { gap: Spacing.md, marginBottom: Spacing.md },
 });

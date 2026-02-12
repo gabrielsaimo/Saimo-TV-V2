@@ -2,3 +2,4 @@
 export { useFavoritesStore } from './favoritesStore';
 export { useSettingsStore } from './settingsStore';
 export { useChannelStore } from './channelStore';
+export { useMediaStore } from './mediaStore';

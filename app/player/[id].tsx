@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Dimensions,
   StatusBar,
   BackHandler,
   ScrollView,
@@ -65,8 +64,7 @@ export default function TVPlayerScreen() {
       return;
     }
     setHasError(false);
-    player.replace(channel.url);
-    player.play();
+    try { player.replace(channel.url); player.play(); } catch {}
   }, [channel?.url, player]);
 
   // Player status listener
@@ -89,7 +87,7 @@ export default function TVPlayerScreen() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      player.pause();
+      try { player.pause(); } catch {}
     };
   }, [player]);
 
@@ -129,7 +127,7 @@ export default function TVPlayerScreen() {
 
   const handleBack = useCallback(() => {
     isMountedRef.current = false;
-    player.pause();
+    try { player.pause(); } catch {}
     router.back();
   }, [router, player]);
 
@@ -171,7 +169,7 @@ export default function TVPlayerScreen() {
   const handleSwitchChannel = useCallback((target: Channel) => {
     setShowGuide(false);
     isMountedRef.current = false;
-    player.pause();
+    try { player.pause(); } catch {}
     router.replace({
       pathname: '/player/[id]',
       params: { id: target.id },
@@ -189,8 +187,6 @@ export default function TVPlayerScreen() {
       }
     }
   }, [showGuide, channel?.id]);
-
-  const { width, height } = Dimensions.get('window');
 
   const formatRemaining = (minutes?: number) => {
     if (!minutes) return '';
@@ -212,7 +208,7 @@ export default function TVPlayerScreen() {
         <VideoView
           ref={videoViewRef}
           player={player}
-          style={{ width: Math.max(width, height), height: Math.min(width, height) }}
+          style={styles.video}
           contentFit="contain"
           nativeControls={false}
         />
@@ -412,6 +408,7 @@ export default function TVPlayerScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   videoContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+  video: { width: '100%', height: '100%' },
   gradient: { ...StyleSheet.absoluteFillObject },
   errorContainer: {
     ...StyleSheet.absoluteFillObject,

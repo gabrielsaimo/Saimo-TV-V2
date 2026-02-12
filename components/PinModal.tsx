@@ -8,7 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, BorderRadius, Spacing, Typography, Shadows } from '../constants/Colors';
+import { Colors, BorderRadius, Spacing, Typography, Shadows, scale } from '../constants/Colors';
 import { useSettingsStore } from '../stores/settingsStore';
 
 interface PinModalProps {
@@ -140,19 +140,19 @@ export default function PinModal({ visible, onClose, onSuccess, mode = 'verify' 
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)' },
-  container: { backgroundColor: Colors.surface, borderRadius: BorderRadius.xl, padding: Spacing.xxl, alignItems: 'center', width: 420, ...Shadows.lg },
+  container: { backgroundColor: Colors.surface, borderRadius: BorderRadius.xl, padding: Spacing.xxl, alignItems: 'center', width: scale(420), ...Shadows.lg },
   closeButton: { position: 'absolute', top: Spacing.md, right: Spacing.md, padding: Spacing.sm },
   closeFocused: { backgroundColor: Colors.surfaceHover, borderRadius: BorderRadius.full },
   title: { color: Colors.text, fontSize: Typography.h2.fontSize, fontWeight: '700', marginTop: Spacing.lg, marginBottom: Spacing.xs },
   subtitle: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, textAlign: 'center', marginBottom: Spacing.xl },
   dotsContainer: { flexDirection: 'row', gap: Spacing.lg, marginBottom: Spacing.lg },
-  dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: Colors.border },
+  dot: { width: scale(20), height: scale(20), borderRadius: scale(10), borderWidth: 2, borderColor: Colors.border },
   dotFilled: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   dotError: { borderColor: Colors.error, backgroundColor: Colors.error },
   error: { color: Colors.error, fontSize: Typography.caption.fontSize, marginBottom: Spacing.md },
-  keypad: { flexDirection: 'row', flexWrap: 'wrap', width: 300, justifyContent: 'center', gap: Spacing.md },
-  key: { width: 80, height: 80, borderRadius: BorderRadius.full, backgroundColor: Colors.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
+  keypad: { flexDirection: 'row', flexWrap: 'wrap', width: scale(300), justifyContent: 'center', gap: Spacing.md },
+  key: { width: scale(80), height: scale(80), borderRadius: BorderRadius.full, backgroundColor: Colors.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
   keyFocused: { backgroundColor: Colors.primary, borderWidth: 2, borderColor: Colors.text },
-  keyEmpty: { width: 80, height: 80 },
-  keyText: { color: Colors.text, fontSize: 28, fontWeight: '600' },
+  keyEmpty: { width: scale(80), height: scale(80) },
+  keyText: { color: Colors.text, fontSize: scale(28), fontWeight: '600' },
 });

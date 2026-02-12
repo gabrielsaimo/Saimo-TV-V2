@@ -263,7 +263,7 @@ export default function MoviesScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>Filmes & Séries</Text>
+          <Text style={styles.title}>Ondmed</Text>
           <Text style={styles.subtitle}>
             {categories.size} categorias • {totalLoaded} títulos
             {bgLoading ? ' (carregando...)' : ''}

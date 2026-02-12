@@ -68,6 +68,7 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
   }, [channel.id, toggleFavorite]);
 
   return (
+    <View style={styles.cardWrapper}>
     <Pressable onPress={handlePress} onLongPress={handleLongPress} onFocus={handleFocus} onBlur={handleBlur}>
       <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }, isFocused && styles.containerFocused]}>
         <View style={styles.imageContainer}>
@@ -108,12 +109,18 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
         </View>
       </Animated.View>
     </Pressable>
+    </View>
   );
 }, (prev, next) => prev.channel.id === next.channel.id);
 
 TVChannelCard.displayName = 'TVChannelCard';
 
+const SCALE_PADDING = 6;
+
 const styles = StyleSheet.create({
+  cardWrapper: {
+    padding: SCALE_PADDING,
+  },
   container: {
     width: TV.channelCardWidth,
     backgroundColor: Colors.cardBg,
@@ -139,7 +146,7 @@ const styles = StyleSheet.create({
   numberBadge: { position: 'absolute', top: Spacing.sm, left: Spacing.sm, backgroundColor: Colors.overlay, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: BorderRadius.sm },
   numberText: { color: Colors.text, fontSize: 14, fontWeight: '600' },
   favBadge: { position: 'absolute', top: Spacing.sm, right: Spacing.sm, backgroundColor: 'rgba(255,71,87,0.3)', padding: 6, borderRadius: BorderRadius.full },
-  info: { padding: Spacing.md },
+  info: { padding: Spacing.md, minHeight: 110 },
   channelName: { color: Colors.text, fontSize: Typography.body.fontSize, fontWeight: '600', marginBottom: 4 },
   category: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize },
   epgContainer: { marginTop: Spacing.sm },

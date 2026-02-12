@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import type { MediaItem } from '../types';
-import { Colors, BorderRadius, Spacing, Typography, TV } from '../constants/Colors';
+import { Colors, BorderRadius, Spacing, Typography, TV, scale } from '../constants/Colors';
 import { useMediaStore } from '../stores/mediaStore';
 
 interface TVMediaCardProps {
@@ -23,7 +23,7 @@ interface TVMediaCardProps {
 const SIZES = {
   small: { width: TV.mediaCardWidth, height: TV.mediaCardHeight },
   medium: { width: TV.mediaCardLargeWidth, height: TV.mediaCardLargeHeight },
-  large: { width: TV.mediaCardLargeWidth + 40, height: TV.mediaCardLargeHeight + 60 },
+  large: { width: TV.mediaCardLargeWidth + scale(40), height: TV.mediaCardLargeHeight + scale(60) },
 };
 
 const getRatingColor = (rating?: number) => {
@@ -68,41 +68,47 @@ const TVMediaCard = memo(({ item, size = 'medium' }: TVMediaCardProps) => {
   }, [item.id, favorite, addFavorite, removeFavorite]);
 
   return (
-    <Pressable onPress={handlePress} onLongPress={handleLongPress} onFocus={handleFocus} onBlur={handleBlur}>
-      <Animated.View style={[styles.container, { width: dimensions.width, height: dimensions.height }, { transform: [{ scale: scaleAnim }] }, isFocused && styles.containerFocused]}>
-        <Image source={{ uri: tmdb?.poster || '' }} style={styles.poster} contentFit="cover" cachePolicy="memory-disk" />
-        <LinearGradient colors={['transparent', 'transparent', 'rgba(0,0,0,0.9)']} style={styles.gradient} />
-        {(tmdb?.rating || 0) > 0 && (
-          <View style={[styles.ratingBadge, { backgroundColor: getRatingColor(tmdb!.rating!) }]}>
-            <Ionicons name="star" size={12} color="#000" />
-            <Text style={styles.ratingText}>{tmdb!.rating!.toFixed(1)}</Text>
+    <View style={styles.cardWrapper}>
+      <Pressable onPress={handlePress} onLongPress={handleLongPress} onFocus={handleFocus} onBlur={handleBlur}>
+        <Animated.View style={[styles.container, { width: dimensions.width, height: dimensions.height }, { transform: [{ scale: scaleAnim }] }, isFocused && styles.containerFocused]}>
+          <Image source={{ uri: tmdb?.poster || '' }} style={styles.poster} contentFit="cover" cachePolicy="memory-disk" />
+          <LinearGradient colors={['transparent', 'transparent', 'rgba(0,0,0,0.9)']} style={styles.gradient} />
+          {tmdb?.rating != null && tmdb.rating > 0 && (
+            <View style={[styles.ratingBadge, { backgroundColor: getRatingColor(tmdb.rating) }]}>
+              <Ionicons name="star" size={12} color="#000" />
+              <Text style={styles.ratingText}>{tmdb.rating.toFixed(1)}</Text>
+            </View>
+          )}
+          {favorite && (
+            <View style={styles.favBadge}>
+              <Ionicons name="heart" size={16} color="#FF4757" />
+            </View>
+          )}
+          <View style={styles.typeBadge}>
+            <Ionicons name={item.type === 'movie' ? 'film-outline' : 'tv-outline'} size={14} color="white" />
           </View>
-        )}
-        {favorite && (
-          <View style={styles.favBadge}>
-            <Ionicons name="heart" size={16} color="#FF4757" />
+          <View style={styles.titleContainer}>
+            <Text style={styles.title} numberOfLines={2}>{tmdb?.title || item.name || 'Sem título'}</Text>
+            {tmdb?.year && <Text style={styles.year}>{tmdb.year}</Text>}
           </View>
-        )}
-        <View style={styles.typeBadge}>
-          <Ionicons name={item.type === 'movie' ? 'film-outline' : 'tv-outline'} size={14} color="white" />
-        </View>
-        <View style={styles.titleContainer}>
-          <Text style={styles.title} numberOfLines={2}>{tmdb?.title || item.name || 'Sem título'}</Text>
-          {tmdb?.year && <Text style={styles.year}>{tmdb.year}</Text>}
-        </View>
-      </Animated.View>
-    </Pressable>
+        </Animated.View>
+      </Pressable>
+    </View>
   );
 }, (prev, next) => prev.item.id === next.item.id);
 
 TVMediaCard.displayName = 'TVMediaCard';
 
+const SCALE_PADDING = 6;
+
 const styles = StyleSheet.create({
+  cardWrapper: {
+    padding: SCALE_PADDING,
+  },
   container: {
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
     backgroundColor: Colors.surface,
-    marginRight: Spacing.md,
     borderWidth: 2,
     borderColor: 'transparent',
   },

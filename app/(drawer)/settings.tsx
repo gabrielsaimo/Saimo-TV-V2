@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Switch,
   Pressable,
   Alert,
 } from 'react-native';
@@ -69,40 +68,48 @@ export default function SettingsScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Interface</Text>
         <View style={styles.section}>
-          <View style={styles.settingRow}>
+          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => setShowEPG(!showEPG)}>
             <View style={styles.settingInfo}>
               <Ionicons name="tv-outline" size={26} color={Colors.primary} />
               <Text style={styles.settingLabel}>Mostrar EPG</Text>
             </View>
-            <Switch value={showEPG} onValueChange={setShowEPG} trackColor={{ false: Colors.border, true: Colors.primary }} thumbColor={Colors.text} />
-          </View>
+            <View style={[styles.toggle, showEPG && styles.toggleActive]}>
+              <View style={[styles.toggleThumb, showEPG && styles.toggleThumbActive]} />
+            </View>
+          </Pressable>
           <View style={styles.divider} />
-          <View style={styles.settingRow}>
+          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => setShowChannelNumber(!showChannelNumber)}>
             <View style={styles.settingInfo}>
               <Ionicons name="list-outline" size={26} color={Colors.primary} />
               <Text style={styles.settingLabel}>Número do canal</Text>
             </View>
-            <Switch value={showChannelNumber} onValueChange={setShowChannelNumber} trackColor={{ false: Colors.border, true: Colors.primary }} thumbColor={Colors.text} />
-          </View>
+            <View style={[styles.toggle, showChannelNumber && styles.toggleActive]}>
+              <View style={[styles.toggleThumb, showChannelNumber && styles.toggleThumbActive]} />
+            </View>
+          </Pressable>
           <View style={styles.divider} />
-          <View style={styles.settingRow}>
+          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => setAutoplay(!autoplay)}>
             <View style={styles.settingInfo}>
               <Ionicons name="play-outline" size={26} color={Colors.primary} />
               <Text style={styles.settingLabel}>Reproduzir automaticamente</Text>
             </View>
-            <Switch value={autoplay} onValueChange={setAutoplay} trackColor={{ false: Colors.border, true: Colors.primary }} thumbColor={Colors.text} />
-          </View>
+            <View style={[styles.toggle, autoplay && styles.toggleActive]}>
+              <View style={[styles.toggleThumb, autoplay && styles.toggleThumbActive]} />
+            </View>
+          </Pressable>
         </View>
 
         <Text style={styles.sectionTitle}>Controle Parental</Text>
         <View style={styles.section}>
-          <View style={styles.settingRow}>
+          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => adultUnlocked ? handleLockAdult() : handleUnlockAdult()}>
             <View style={styles.settingInfo}>
               <Ionicons name={adultUnlocked ? 'lock-open-outline' : 'lock-closed-outline'} size={26} color={adultUnlocked ? Colors.accent : Colors.primary} />
               <Text style={styles.settingLabel}>Conteúdo adulto</Text>
             </View>
-            <Switch value={adultUnlocked} onValueChange={(v) => v ? handleUnlockAdult() : handleLockAdult()} trackColor={{ false: Colors.border, true: Colors.accent }} thumbColor={Colors.text} />
-          </View>
+            <View style={[styles.toggle, adultUnlocked && styles.toggleActiveAccent]}>
+              <View style={[styles.toggleThumb, adultUnlocked && styles.toggleThumbActive]} />
+            </View>
+          </Pressable>
           <View style={styles.divider} />
           <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={handleChangePIN}>
             <View style={styles.settingInfo}>
@@ -174,6 +181,11 @@ const styles = StyleSheet.create({
   settingInfo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 },
   settingLabel: { color: Colors.text, fontSize: Typography.body.fontSize },
   divider: { height: 1, backgroundColor: Colors.border, marginLeft: Spacing.lg + 26 + Spacing.md },
+  toggle: { width: 56, height: 32, borderRadius: 16, backgroundColor: Colors.border, justifyContent: 'center', paddingHorizontal: 3 },
+  toggleActive: { backgroundColor: Colors.primary },
+  toggleActiveAccent: { backgroundColor: Colors.accent },
+  toggleThumb: { width: 26, height: 26, borderRadius: 13, backgroundColor: Colors.textSecondary },
+  toggleThumbActive: { backgroundColor: Colors.text, alignSelf: 'flex-end' },
   appInfo: { alignItems: 'center', marginTop: Spacing.xxl, paddingVertical: Spacing.lg },
   appName: { color: Colors.text, fontSize: Typography.body.fontSize, fontWeight: '600' },
   appVersion: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginTop: Spacing.xs },

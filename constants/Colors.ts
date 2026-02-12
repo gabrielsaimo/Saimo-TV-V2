@@ -1,5 +1,13 @@
-// Constantes de cores e tema do app - versão TV Box
-// Escala aumentada para visualização à distância (10-foot experience)
+// Constantes de cores e tema do app - versao TV Box
+// Escala aumentada para visualizacao a distancia (10-foot experience)
+import { Dimensions } from 'react-native';
+
+// Responsive scaling: normalizes all sizes to a 1920px baseline
+// Works correctly on 720p (1280), 1080p (1920), 1440p (2560), and 4K (3840)
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const BASE_WIDTH = 1920;
+export const scale = (size: number) => Math.round((SCREEN_WIDTH / BASE_WIDTH) * size);
+export const SCREEN = { width: SCREEN_WIDTH, height: SCREEN_HEIGHT };
 
 export const Colors = {
   // Theme escuro profissional
@@ -8,12 +16,12 @@ export const Colors = {
   surfaceVariant: '#1E1E2D',
   surfaceHover: '#252538',
 
-  // Cores primárias
+  // Cores primarias
   primary: '#6366F1',
   primaryDark: '#4F46E5',
   primaryLight: '#818CF8',
 
-  // Cores secundárias
+  // Cores secundarias
   secondary: '#8B5CF6',
   secondaryDark: '#7C3AED',
   secondaryLight: '#A78BFA',
@@ -66,7 +74,7 @@ export const Colors = {
   focusBorderWidth: 3,
 };
 
-// Espaçamentos - aumentados para TV
+// Espacamentos - aumentados para TV
 export const Spacing = {
   xs: 6,
   sm: 12,
@@ -87,7 +95,7 @@ export const BorderRadius = {
   full: 9999,
 };
 
-// Tipografia - maior para TV (visualização à distância)
+// Tipografia - maior para TV (visualizacao a distancia)
 export const Typography = {
   h1: {
     fontSize: 40,
@@ -151,24 +159,36 @@ export const Shadows = {
   },
 };
 
-// TV-specific constants
+// TV-specific constants — computed dynamically from screen size
+// Sidebar available width = SCREEN_WIDTH - sidebarCollapsedWidth
+const CONTENT_WIDTH = SCREEN_WIDTH - scale(80);
+const CARD_GAP = Spacing.lg; // gap between cards
+
+// Calculate how many columns fit for channel cards (~300px each at 1920)
+const CHANNEL_CARD_W = scale(300);
+const channelCols = Math.max(2, Math.floor((CONTENT_WIDTH - Spacing.xl * 2) / (CHANNEL_CARD_W + CARD_GAP)));
+
+// Calculate how many columns fit for media cards (~220px each at 1920)
+const MEDIA_CARD_W = scale(220);
+const mediaCols = Math.max(2, Math.floor((CONTENT_WIDTH - Spacing.xl * 2) / (MEDIA_CARD_W + Spacing.md)));
+
 export const TV = {
   // Sidebar width
-  sidebarWidth: 280,
-  sidebarCollapsedWidth: 80,
+  sidebarWidth: scale(280),
+  sidebarCollapsedWidth: scale(80),
 
-  // Card sizes for TV
-  channelCardWidth: 300,
-  channelCardHeight: 200,
-  mediaCardWidth: 220,
-  mediaCardHeight: 330,
-  mediaCardLargeWidth: 280,
-  mediaCardLargeHeight: 420,
+  // Card sizes for TV — scale with resolution
+  channelCardWidth: CHANNEL_CARD_W,
+  channelCardHeight: scale(200),
+  mediaCardWidth: MEDIA_CARD_W,
+  mediaCardHeight: scale(330),
+  mediaCardLargeWidth: scale(280),
+  mediaCardLargeHeight: scale(420),
 
   // Focus animation duration
   focusAnimDuration: 150,
 
-  // Number of columns in grids
-  channelColumns: 4,
-  mediaColumns: 5,
+  // Number of columns in grids — computed from screen size
+  channelColumns: channelCols,
+  mediaColumns: mediaCols,
 };

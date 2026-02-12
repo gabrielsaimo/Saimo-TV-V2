@@ -7,7 +7,6 @@ import {
   StatusBar,
   Pressable,
   ActivityIndicator,
-  Dimensions,
   FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -15,12 +14,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import { Colors, Typography, Spacing, BorderRadius, scale, SCREEN } from '../../constants/Colors';
 import { getSeriesById } from '../../services/mediaService';
 import { useMediaStore } from '../../stores/mediaStore';
 import type { SeriesItem, Episode, CastMember } from '../../types';
-
-const { width, height } = Dimensions.get('window');
 
 export default function TVSeriesDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -319,7 +316,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
-  hero: { height: height * 0.5, position: 'relative' },
+  hero: { height: SCREEN.height * 0.5, position: 'relative' },
   backdrop: { width: '100%', height: '100%' },
   heroGradient: { ...StyleSheet.absoluteFillObject },
   headerButton: {
@@ -330,7 +327,7 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 0, left: Spacing.xl, right: Spacing.xl,
     flexDirection: 'row', gap: Spacing.lg, alignItems: 'flex-end', paddingBottom: Spacing.xl,
   },
-  poster: { width: 130, height: 195, borderRadius: BorderRadius.lg, backgroundColor: Colors.surface },
+  poster: { width: scale(130), height: scale(195), borderRadius: BorderRadius.lg, backgroundColor: Colors.surface },
   heroInfo: { flex: 1, paddingBottom: Spacing.sm },
   title: { color: Colors.text, fontSize: Typography.h1.fontSize, fontWeight: '700', lineHeight: 48 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg, marginTop: Spacing.sm },
@@ -372,16 +369,16 @@ const styles = StyleSheet.create({
   episodeCardActive: { borderWidth: 2, borderColor: Colors.primary },
   episodeCardFocused: { borderWidth: 3, borderColor: Colors.primary, backgroundColor: Colors.surfaceHover },
   episodeNumber: {
-    width: 52, height: 52, borderRadius: BorderRadius.md,
+    width: scale(52), height: scale(52), borderRadius: BorderRadius.md,
     backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center',
   },
   episodeNumberText: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700' },
   episodeInfo: { flex: 1 },
   episodeName: { color: Colors.text, fontSize: Typography.body.fontSize, fontWeight: '500' },
   episodeContinue: { color: Colors.primary, fontSize: Typography.caption.fontSize, marginTop: 4 },
-  castCard: { width: 100, marginRight: Spacing.lg, alignItems: 'center' },
+  castCard: { width: scale(100), marginRight: Spacing.lg, alignItems: 'center' },
   castCardFocused: { borderWidth: 2, borderColor: Colors.primary, borderRadius: BorderRadius.lg, padding: 4 },
-  castPhoto: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.surface },
+  castPhoto: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.surface },
   castName: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
   castCharacter: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center' },
   errorText: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, marginTop: Spacing.lg },

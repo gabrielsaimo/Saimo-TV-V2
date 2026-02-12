@@ -5,14 +5,13 @@ import {
   StyleSheet,
   Pressable,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { Slot, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
 
-const SIDEBAR_WIDTH = 280;
-const SIDEBAR_COLLAPSED = 80;
+const SIDEBAR_WIDTH = TV.sidebarWidth;
+const SIDEBAR_COLLAPSED = TV.sidebarCollapsedWidth;
 
 interface NavItem {
   route: string;
@@ -23,7 +22,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { route: '/(drawer)', label: 'TV ao Vivo', icon: 'tv-outline', iconFocused: 'tv' },
-  { route: '/(drawer)/movies', label: 'Filmes & Séries', icon: 'film-outline', iconFocused: 'film' },
+  { route: '/(drawer)/movies', label: 'Ondmed', icon: 'film-outline', iconFocused: 'film' },
   { route: '/(drawer)/favorites', label: 'Favoritos', icon: 'heart-outline', iconFocused: 'heart' },
   { route: '/(drawer)/settings', label: 'Ajustes', icon: 'settings-outline', iconFocused: 'settings' },
 ];
@@ -141,9 +140,10 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xs,
     paddingVertical: Spacing.md,
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginBottom: Spacing.xl,
   },
   logoText: {
@@ -158,11 +158,13 @@ const styles = StyleSheet.create({
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
     gap: Spacing.md,
     borderRadius: BorderRadius.md,
-    marginHorizontal: Spacing.sm,
+    marginHorizontal: 0,
+    minHeight: 56,
   },
   navItemActive: {
     backgroundColor: 'rgba(99, 102, 241, 0.15)',
@@ -194,8 +196,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   versionContainer: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.sm,
+    alignItems: 'center',
   },
   versionText: {
     color: Colors.textMuted,
