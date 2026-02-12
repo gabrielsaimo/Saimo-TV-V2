@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { clearEPGCache } from '../../services/epgService';
@@ -68,7 +68,7 @@ export default function SettingsScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Interface</Text>
         <View style={styles.section}>
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => setShowEPG(!showEPG)}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={() => setShowEPG(!showEPG)}>
             <View style={styles.settingInfo}>
               <Ionicons name="tv-outline" size={26} color={Colors.primary} />
               <Text style={styles.settingLabel}>Mostrar EPG</Text>
@@ -76,9 +76,9 @@ export default function SettingsScreen() {
             <View style={[styles.toggle, showEPG && styles.toggleActive]}>
               <View style={[styles.toggleThumb, showEPG && styles.toggleThumbActive]} />
             </View>
-          </Pressable>
+          </TVPressable>
           <View style={styles.divider} />
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => setShowChannelNumber(!showChannelNumber)}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={() => setShowChannelNumber(!showChannelNumber)}>
             <View style={styles.settingInfo}>
               <Ionicons name="list-outline" size={26} color={Colors.primary} />
               <Text style={styles.settingLabel}>Número do canal</Text>
@@ -86,9 +86,9 @@ export default function SettingsScreen() {
             <View style={[styles.toggle, showChannelNumber && styles.toggleActive]}>
               <View style={[styles.toggleThumb, showChannelNumber && styles.toggleThumbActive]} />
             </View>
-          </Pressable>
+          </TVPressable>
           <View style={styles.divider} />
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => setAutoplay(!autoplay)}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={() => setAutoplay(!autoplay)}>
             <View style={styles.settingInfo}>
               <Ionicons name="play-outline" size={26} color={Colors.primary} />
               <Text style={styles.settingLabel}>Reproduzir automaticamente</Text>
@@ -96,12 +96,12 @@ export default function SettingsScreen() {
             <View style={[styles.toggle, autoplay && styles.toggleActive]}>
               <View style={[styles.toggleThumb, autoplay && styles.toggleThumbActive]} />
             </View>
-          </Pressable>
+          </TVPressable>
         </View>
 
         <Text style={styles.sectionTitle}>Controle Parental</Text>
         <View style={styles.section}>
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={() => adultUnlocked ? handleLockAdult() : handleUnlockAdult()}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={() => adultUnlocked ? handleLockAdult() : handleUnlockAdult()}>
             <View style={styles.settingInfo}>
               <Ionicons name={adultUnlocked ? 'lock-open-outline' : 'lock-closed-outline'} size={26} color={adultUnlocked ? Colors.accent : Colors.primary} />
               <Text style={styles.settingLabel}>Conteúdo adulto</Text>
@@ -109,42 +109,42 @@ export default function SettingsScreen() {
             <View style={[styles.toggle, adultUnlocked && styles.toggleActiveAccent]}>
               <View style={[styles.toggleThumb, adultUnlocked && styles.toggleThumbActive]} />
             </View>
-          </Pressable>
+          </TVPressable>
           <View style={styles.divider} />
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={handleChangePIN}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={handleChangePIN}>
             <View style={styles.settingInfo}>
               <Ionicons name="key-outline" size={26} color={Colors.primary} />
               <Text style={styles.settingLabel}>Alterar PIN</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color={Colors.textSecondary} />
-          </Pressable>
+          </TVPressable>
         </View>
 
         <Text style={styles.sectionTitle}>Dados</Text>
         <View style={styles.section}>
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={handleClearCache}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={handleClearCache}>
             <View style={styles.settingInfo}>
               <Ionicons name="trash-outline" size={26} color={Colors.warning} />
               <Text style={styles.settingLabel}>Limpar cache EPG</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color={Colors.textSecondary} />
-          </Pressable>
+          </TVPressable>
           <View style={styles.divider} />
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={handleClearFavorites}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={handleClearFavorites}>
             <View style={styles.settingInfo}>
               <Ionicons name="heart-dislike-outline" size={26} color={Colors.error} />
               <Text style={styles.settingLabel}>Remover todos favoritos</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color={Colors.textSecondary} />
-          </Pressable>
+          </TVPressable>
           <View style={styles.divider} />
-          <Pressable style={({ focused }) => [styles.settingRow, focused && styles.settingRowFocused]} onPress={handleClearMediaCache}>
+          <TVPressable style={styles.settingRow} focusedStyle={styles.settingRowFocused} focusScale={1.02} onPress={handleClearMediaCache}>
             <View style={styles.settingInfo}>
               <Ionicons name="trash-outline" size={26} color={Colors.error} />
               <Text style={styles.settingLabel}>Limpar cache de mídia</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color={Colors.textSecondary} />
-          </Pressable>
+          </TVPressable>
         </View>
 
         <View style={styles.appInfo}>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: Spacing.sm, marginTop: Spacing.lg },
   section: { backgroundColor: Colors.cardBg, borderRadius: BorderRadius.lg, overflow: 'hidden' },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Spacing.lg },
-  settingRowFocused: { backgroundColor: Colors.surfaceHover, borderWidth: 2, borderColor: Colors.primary },
+  settingRowFocused: { backgroundColor: 'rgba(99,102,241,0.2)' },
   settingInfo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 },
   settingLabel: { color: Colors.text, fontSize: Typography.body.fontSize },
   divider: { height: 1, backgroundColor: Colors.border, marginLeft: Spacing.lg + 26 + Spacing.md },

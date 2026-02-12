@@ -16,9 +16,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import type { Channel, CurrentProgram } from '../../types';
 import { Colors, BorderRadius, Spacing, Typography } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { getCurrentProgram, fetchChannelEPG } from '../../services/epgService';
 import { channels as allChannelsList, getChannelById } from '../../data/channels';
+import { useTVKeyHandler } from '../../hooks/useTVKeyHandler';
 
 function getResolutionLabel(h: number): string {
   if (h >= 2160) return '4K';
@@ -48,12 +50,55 @@ export default function TVPlayerScreen() {
   const [hasError, setHasError] = useState(false);
   const [resolution, setResolution] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  // Channel OSD
+  const [osdChannel, setOsdChannel] = useState<Channel | null>(null);
+  const osdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const [favorite, setFavorite] = useState(channel ? isFavorite(channel.id) : false);
 
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
+
+  // Channel navigation
+  const currentIndex = useMemo(() => {
+    return allChannelsList.findIndex(ch => ch.id === channel?.id);
+  }, [channel?.id]);
+
+  const switchToChannel = useCallback((target: Channel) => {
+    if (!target || target.id === channel?.id) return;
+    setShowControls(false);
+    setShowGuide(false);
+    setShowMenu(false);
+    setFavorite(isFavorite(target.id));
+    router.replace({
+      pathname: '/player/[id]',
+      params: { id: target.id },
+    });
+  }, [channel?.id, router, isFavorite]);
+
+  const switchChannelByOffset = useCallback((offset: number) => {
+    if (currentIndex < 0) return;
+    const nextIndex = (currentIndex + offset + allChannelsList.length) % allChannelsList.length;
+    const nextChannel = allChannelsList[nextIndex];
+    if (nextChannel) {
+      setOsdChannel(nextChannel);
+      switchToChannel(nextChannel);
+    }
+  }, [currentIndex, switchToChannel]);
+
+  // OSD auto-hide
+  useEffect(() => {
+    if (osdChannel) {
+      if (osdTimeoutRef.current) clearTimeout(osdTimeoutRef.current);
+      osdTimeoutRef.current = setTimeout(() => setOsdChannel(null), 3000);
+    }
+    return () => {
+      if (osdTimeoutRef.current) clearTimeout(osdTimeoutRef.current);
+    };
+  }, [osdChannel]);
 
   // Channel change without remount
   const isFirstRender = useRef(true);
@@ -115,15 +160,59 @@ export default function TVPlayerScreen() {
     };
   }, [showControls, hasError]);
 
+  // D-pad / Remote key handler
+  const { setMode } = useTVKeyHandler(
+    (event) => {
+      // When guide or menu is open, only intercept menu key to close
+      if (showGuide || showMenu) {
+        if (event.eventType === 'menu') {
+          if (showMenu) setShowMenu(false);
+          else if (showGuide) setShowGuide(false);
+        }
+        return;
+      }
+
+      switch (event.eventType) {
+        case 'up':
+        case 'channelUp':
+          switchChannelByOffset(-1);
+          break;
+        case 'down':
+        case 'channelDown':
+          switchChannelByOffset(1);
+          break;
+        case 'select':
+        case 'playPause':
+          handleScreenPress();
+          break;
+        case 'menu':
+          setShowMenu(true);
+          setShowControls(false);
+          if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+          break;
+      }
+    },
+  );
+
+  // Switch key interception mode when overlays open/close
+  useEffect(() => {
+    if (showGuide || showMenu) {
+      setMode('passthrough');
+    } else {
+      setMode('intercept');
+    }
+  }, [showGuide, showMenu, setMode]);
+
   // Back Handler (remote back button)
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showMenu) { setShowMenu(false); return true; }
       if (showGuide) { setShowGuide(false); return true; }
       handleBack();
       return true;
     });
     return () => handler.remove();
-  }, [showGuide]);
+  }, [showGuide, showMenu]);
 
   const handleBack = useCallback(() => {
     isMountedRef.current = false;
@@ -139,8 +228,9 @@ export default function TVPlayerScreen() {
 
   const handleScreenPress = useCallback(() => {
     if (showGuide) { setShowGuide(false); return; }
+    if (showMenu) { setShowMenu(false); return; }
     if (!hasError) setShowControls(prev => !prev);
-  }, [hasError, showGuide]);
+  }, [hasError, showGuide, showMenu]);
 
   const handleRetry = useCallback(() => {
     if (!channel) return;
@@ -168,13 +258,12 @@ export default function TVPlayerScreen() {
 
   const handleSwitchChannel = useCallback((target: Channel) => {
     setShowGuide(false);
-    isMountedRef.current = false;
-    try { player.pause(); } catch {}
+    setFavorite(isFavorite(target.id));
     router.replace({
       pathname: '/player/[id]',
       params: { id: target.id },
     });
-  }, [router, player]);
+  }, [router, isFavorite]);
 
   // Scroll to current channel in guide
   useEffect(() => {
@@ -217,29 +306,31 @@ export default function TVPlayerScreen() {
         {hasError && (
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle-outline" size={80} color={Colors.error} />
-            <Text style={styles.errorTitle}>Canal indisponível</Text>
+            <Text style={styles.errorTitle}>Canal indisponivel</Text>
             <Text style={styles.errorText}>
-              Este canal está temporariamente fora do ar.{'\n'}
+              Este canal esta temporariamente fora do ar.{'\n'}
               Tente novamente mais tarde.
             </Text>
-            <Pressable
-              style={({ focused }) => [styles.retryButton, focused && styles.buttonFocused]}
+            <TVPressable
+              style={styles.retryButton}
+              focusScale={1.08}
               onPress={handleRetry}
             >
               <Ionicons name="refresh" size={24} color={Colors.text} />
               <Text style={styles.retryText}>Tentar novamente</Text>
-            </Pressable>
-            <Pressable
-              style={({ focused }) => [styles.backButtonError, focused && styles.buttonFocused]}
+            </TVPressable>
+            <TVPressable
+              style={styles.backButtonError}
+              focusScale={1.08}
               onPress={handleBack}
             >
               <Text style={styles.backButtonText}>Voltar aos canais</Text>
-            </Pressable>
+            </TVPressable>
           </View>
         )}
 
         {/* Controls Overlay */}
-        {showControls && !hasError && (
+        {showControls && !hasError && !showMenu && (
           <>
             <LinearGradient
               colors={['rgba(0,0,0,0.7)', 'transparent', 'transparent', 'rgba(0,0,0,0.7)']}
@@ -248,12 +339,13 @@ export default function TVPlayerScreen() {
 
             {/* Top Bar */}
             <View style={styles.topBar}>
-              <Pressable
-                style={({ focused }) => [styles.backButton, focused && styles.buttonFocused]}
+              <TVPressable
+                style={styles.backButton}
+                focusScale={1.15}
                 onPress={handleBack}
               >
                 <Ionicons name="arrow-back" size={28} color={Colors.text} />
-              </Pressable>
+              </TVPressable>
 
               <View style={styles.channelInfo}>
                 <Text style={styles.channelName}>{channel.name}</Text>
@@ -266,23 +358,23 @@ export default function TVPlayerScreen() {
                 </View>
               )}
 
-              <Pressable
-                style={({ focused }) => [
+              <TVPressable
+                style={[
                   styles.iconButton,
                   showGuide && styles.iconButtonActive,
-                  focused && styles.buttonFocused,
                 ]}
+                focusScale={1.15}
                 onPress={handleToggleGuide}
               >
                 <Ionicons name="list" size={28} color={Colors.text} />
-              </Pressable>
+              </TVPressable>
 
-              <Pressable
-                style={({ focused }) => [
+              <TVPressable
+                style={[
                   styles.iconButton,
                   favorite && styles.iconButtonFav,
-                  focused && styles.buttonFocused,
                 ]}
+                focusScale={1.15}
                 onPress={handleToggleFavorite}
               >
                 <Ionicons
@@ -290,7 +382,7 @@ export default function TVPlayerScreen() {
                   size={28}
                   color={favorite ? '#FF4757' : Colors.text}
                 />
-              </Pressable>
+              </TVPressable>
             </View>
 
             {/* Bottom Bar - EPG */}
@@ -338,6 +430,60 @@ export default function TVPlayerScreen() {
           </>
         )}
 
+        {/* Channel OSD */}
+        {osdChannel && !showGuide && !showMenu && (
+          <View style={styles.osdContainer}>
+            <View style={styles.osdContent}>
+              <Text style={styles.osdNumber}>{osdChannel.channelNumber}</Text>
+              <View style={styles.osdInfo}>
+                <Text style={styles.osdName} numberOfLines={1}>{osdChannel.name}</Text>
+                <Text style={styles.osdCategory}>{osdChannel.category}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Menu Overlay */}
+        {showMenu && (
+          <View style={styles.menuOverlay}>
+            <Pressable style={styles.menuBackdrop} onPress={() => setShowMenu(false)} />
+            <View style={styles.menuContainer}>
+              <Text style={styles.menuTitle}>Opcoes</Text>
+              <TVPressable
+                style={styles.menuItem}
+                focusedStyle={styles.menuItemFocused}
+                focusScale={1.03}
+                onPress={() => {
+                  handleToggleFavorite();
+                  setShowMenu(false);
+                }}
+                hasTVPreferredFocus
+              >
+                <Ionicons
+                  name={favorite ? 'heart' : 'heart-outline'}
+                  size={28}
+                  color={favorite ? '#FF4757' : Colors.text}
+                />
+                <Text style={styles.menuItemText}>
+                  {favorite ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}
+                </Text>
+              </TVPressable>
+              <TVPressable
+                style={styles.menuItem}
+                focusedStyle={styles.menuItemFocused}
+                focusScale={1.03}
+                onPress={() => {
+                  setShowMenu(false);
+                  handleToggleGuide();
+                }}
+              >
+                <Ionicons name="list" size={28} color={Colors.text} />
+                <Text style={styles.menuItemText}>Guia de Canais</Text>
+              </TVPressable>
+            </View>
+          </View>
+        )}
+
         {/* Channel Guide Overlay */}
         {showGuide && (
           <View style={styles.guideOverlay}>
@@ -346,12 +492,13 @@ export default function TVPlayerScreen() {
               <View style={styles.guideHeader}>
                 <Ionicons name="tv-outline" size={24} color={Colors.primary} />
                 <Text style={styles.guideTitle}>Guia de Canais</Text>
-                <Pressable
-                  style={({ focused }) => [styles.guideClose, focused && styles.buttonFocused]}
+                <TVPressable
+                  style={styles.guideClose}
+                  focusScale={1.15}
                   onPress={handleToggleGuide}
                 >
                   <Ionicons name="close" size={28} color={Colors.text} />
-                </Pressable>
+                </TVPressable>
               </View>
               <ScrollView
                 ref={guideScrollRef}
@@ -361,13 +508,14 @@ export default function TVPlayerScreen() {
                 {guideChannels.map(({ channel: ch, epg: chEpg }) => {
                   const isActive = ch.id === channel.id;
                   return (
-                    <Pressable
+                    <TVPressable
                       key={ch.id}
-                      style={({ focused }) => [
+                      style={[
                         styles.guideItem,
                         isActive && styles.guideItemActive,
-                        focused && styles.guideItemFocused,
                       ]}
+                      focusedStyle={styles.guideItemFocused}
+                      focusScale={1.02}
                       onPress={() => !isActive && handleSwitchChannel(ch)}
                     >
                       <View style={styles.guideChannelNum}>
@@ -393,7 +541,7 @@ export default function TVPlayerScreen() {
                       {isActive && (
                         <View style={styles.guideActiveDot} />
                       )}
-                    </Pressable>
+                    </TVPressable>
                   );
                 })}
               </ScrollView>
@@ -426,7 +574,7 @@ const styles = StyleSheet.create({
   retryText: { color: Colors.text, fontWeight: '600', fontSize: Typography.body.fontSize },
   backButtonError: { marginTop: Spacing.lg, paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg },
   backButtonText: { color: Colors.textSecondary, fontSize: Typography.body.fontSize },
-  buttonFocused: { borderWidth: 3, borderColor: Colors.primary, borderRadius: BorderRadius.lg },
+  buttonFocused: { backgroundColor: 'rgba(99,102,241,0.3)' },
   topBar: {
     position: 'absolute', top: 0, left: 0, right: 0,
     flexDirection: 'row', alignItems: 'center',
@@ -460,6 +608,45 @@ const styles = StyleSheet.create({
   nextContainer: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   nextLabel: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, fontWeight: '600' },
   nextProgram: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, flex: 1 },
+  // Channel OSD
+  osdContainer: {
+    position: 'absolute', top: Spacing.xl, left: Spacing.xl, zIndex: 100,
+  },
+  osdContent: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: BorderRadius.lg,
+    padding: Spacing.lg, borderLeftWidth: 4, borderLeftColor: Colors.primary, gap: Spacing.lg,
+  },
+  osdNumber: {
+    color: Colors.primary, fontSize: Typography.h1.fontSize, fontWeight: '700',
+    fontFamily: 'monospace', minWidth: 60, textAlign: 'center',
+  },
+  osdInfo: { flex: 1 },
+  osdName: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '600' },
+  osdCategory: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginTop: 2 },
+  // Menu Overlay
+  menuOverlay: {
+    ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 200,
+  },
+  menuBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)' },
+  menuContainer: {
+    backgroundColor: 'rgba(20,20,20,0.98)', borderRadius: BorderRadius.xl,
+    padding: Spacing.xl, minWidth: 350, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  menuTitle: {
+    color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700',
+    marginBottom: Spacing.lg, textAlign: 'center',
+  },
+  menuItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: Spacing.lg, paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md, gap: Spacing.md,
+    borderWidth: 2, borderColor: 'transparent',
+  },
+  menuItemFocused: {
+    backgroundColor: 'rgba(99,102,241,0.3)', borderColor: Colors.primary,
+  },
+  menuItemText: { color: Colors.text, fontSize: Typography.body.fontSize },
   // Guide
   guideOverlay: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
   guideBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
@@ -478,7 +665,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   guideItemActive: { backgroundColor: 'rgba(255,255,255,0.08)', borderLeftWidth: 4, borderLeftColor: Colors.primary },
-  guideItemFocused: { backgroundColor: 'rgba(99,102,241,0.2)', borderWidth: 2, borderColor: Colors.primary },
+  guideItemFocused: { backgroundColor: 'rgba(99,102,241,0.2)' },
   guideChannelNum: { width: 48, alignItems: 'center' },
   guideNumText: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, fontWeight: '600', fontFamily: 'monospace' },
   guideNumTextActive: { color: Colors.primary },

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Pressable,
   TextInput,
   ActivityIndicator,
   InteractionManager,
@@ -12,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { useMediaStore } from '../../stores/mediaStore';
 import { filterMedia, sortMedia, getAllGenres } from '../../services/mediaService';
 import {
@@ -270,18 +270,22 @@ export default function MoviesScreen() {
           </Text>
         </View>
         <View style={styles.headerRight}>
-          <Pressable
-            style={({ focused }) => [styles.headerBtn, focused && styles.headerBtnFocused]}
+          <TVPressable
+            style={styles.headerBtn}
+            focusedStyle={styles.headerBtnFocused}
+            focusScale={1.15}
             onPress={() => setShowSearch(!showSearch)}
           >
             <Ionicons name={showSearch ? 'close' : 'search'} size={24} color={Colors.text} />
-          </Pressable>
-          <Pressable
-            style={({ focused }) => [styles.headerBtn, styles.reloadBtn, focused && styles.headerBtnFocused]}
+          </TVPressable>
+          <TVPressable
+            style={[styles.headerBtn, styles.reloadBtn]}
+            focusedStyle={styles.headerBtnFocused}
+            focusScale={1.15}
             onPress={() => { stopLoading(); clearAllCaches(); setCategories(new Map()); setTotalLoaded(0); catalogLoadedRef.current = false; loadCatalog(true); }}
           >
             <Ionicons name="refresh" size={22} color={Colors.text} />
-          </Pressable>
+          </TVPressable>
         </View>
       </View>
 
@@ -345,7 +349,7 @@ const styles = StyleSheet.create({
   subtitle: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginTop: 4 },
   headerBtn: { padding: Spacing.sm, backgroundColor: Colors.surface, borderRadius: BorderRadius.full },
   reloadBtn: { backgroundColor: Colors.primary },
-  headerBtnFocused: { borderWidth: 2, borderColor: Colors.text },
+  headerBtnFocused: { backgroundColor: 'rgba(99,102,241,0.25)' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.lg, marginHorizontal: Spacing.xl, marginBottom: Spacing.md, height: 56, gap: Spacing.sm },
   searchInput: { flex: 1, color: Colors.text, fontSize: Typography.body.fontSize },
   grid: { paddingHorizontal: Spacing.xl },

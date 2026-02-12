@@ -5,11 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   FlatList,
-  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { useMediaStore } from '../../stores/mediaStore';
 import { getAllChannels } from '../../data/channels';
@@ -55,13 +55,15 @@ export default function FavoritesScreen() {
           <Text style={styles.emptySubtitle}>
             Use o controle remoto para adicionar canais,{'\n'}filmes ou séries aos favoritos
           </Text>
-          <Pressable
-            style={({ focused }) => [styles.emptyButton, focused && styles.emptyButtonFocused]}
+          <TVPressable
+            style={styles.emptyButton}
+            focusedStyle={styles.emptyButtonFocused}
+            focusScale={1.08}
             onPress={() => {}}
             hasTVPreferredFocus
           >
             <Text style={styles.emptyButtonText}>Explorar conteúdo</Text>
-          </Pressable>
+          </TVPressable>
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -110,6 +112,6 @@ const styles = StyleSheet.create({
   emptyTitle: { color: Colors.text, fontSize: Typography.h2.fontSize, fontWeight: '600', marginTop: Spacing.lg },
   emptySubtitle: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, textAlign: 'center', marginTop: Spacing.sm, lineHeight: 28 },
   emptyButton: { marginTop: Spacing.xl, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, backgroundColor: Colors.primary, borderRadius: BorderRadius.lg },
-  emptyButtonFocused: { borderWidth: 3, borderColor: Colors.text },
+  emptyButtonFocused: { backgroundColor: 'rgba(99,102,241,0.8)' },
   emptyButtonText: { color: '#000', fontWeight: '600', fontSize: Typography.body.fontSize },
 });

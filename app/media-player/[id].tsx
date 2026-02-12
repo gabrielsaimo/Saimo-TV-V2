@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { useMediaStore } from '../../stores/mediaStore';
+import { useTVKeyHandler } from '../../hooks/useTVKeyHandler';
+import type { SeriesEpisodes } from '../../types';
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '00:00';
@@ -55,7 +58,16 @@ async function resolveRedirects(initialUrl: string): Promise<string> {
 }
 
 export default function TVMediaPlayerScreen() {
-  const params = useLocalSearchParams<{ id: string; url: string; title: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    url: string;
+    title: string;
+    seriesId?: string;
+    season?: string;
+    episode?: string;
+    seriesName?: string;
+    seriesEpisodes?: string;
+  }>();
   const router = useRouter();
 
   const rawUrl = params.url || '';
@@ -76,14 +88,79 @@ export default function TVMediaPlayerScreen() {
   const videoViewRef = useRef<VideoView>(null);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
-  const { addToHistory } = useMediaStore();
+  const { addToHistory, setSeriesProgress } = useMediaStore();
+
+  // Parse series context for next episode
+  const seriesContext = useMemo(() => {
+    if (!params.seriesId || !params.seriesEpisodes) return null;
+    try {
+      const episodes: SeriesEpisodes = JSON.parse(decodeURIComponent(params.seriesEpisodes));
+      const currentSeason = params.season || '1';
+      const currentEpisode = parseInt(params.episode || '1', 10);
+      return {
+        seriesId: params.seriesId,
+        seriesName: params.seriesName || '',
+        episodes,
+        currentSeason,
+        currentEpisode,
+      };
+    } catch {
+      return null;
+    }
+  }, [params.seriesId, params.seriesEpisodes, params.season, params.episode, params.seriesName]);
+
+  const nextEpisode = useMemo(() => {
+    if (!seriesContext) return null;
+    const { episodes, currentSeason, currentEpisode } = seriesContext;
+    const seasonEps = episodes[currentSeason];
+    if (!seasonEps) return null;
+
+    // Try next episode in same season
+    const nextEpInSeason = seasonEps.find(ep => ep.episode === currentEpisode + 1);
+    if (nextEpInSeason) {
+      return { episode: nextEpInSeason, season: currentSeason };
+    }
+
+    // Try first episode of next season
+    const seasons = Object.keys(episodes).sort((a, b) => parseInt(a) - parseInt(b));
+    const currentSeasonIndex = seasons.indexOf(currentSeason);
+    if (currentSeasonIndex >= 0 && currentSeasonIndex < seasons.length - 1) {
+      const nextSeasonKey = seasons[currentSeasonIndex + 1];
+      const nextSeasonEps = episodes[nextSeasonKey];
+      if (nextSeasonEps && nextSeasonEps.length > 0) {
+        return { episode: nextSeasonEps[0], season: nextSeasonKey };
+      }
+    }
+
+    return null;
+  }, [seriesContext]);
+
+  const handleNextEpisode = useCallback(() => {
+    if (!nextEpisode || !seriesContext) return;
+    const { episode: ep, season } = nextEpisode;
+    setSeriesProgress(seriesContext.seriesId, parseInt(season), ep.episode, ep.id);
+
+    router.replace({
+      pathname: '/media-player/[id]' as any,
+      params: {
+        id: ep.id,
+        url: encodeURIComponent(ep.url),
+        title: `${seriesContext.seriesName} - T${season} E${ep.episode}`,
+        seriesId: seriesContext.seriesId,
+        season: season,
+        episode: ep.episode.toString(),
+        seriesName: seriesContext.seriesName,
+        seriesEpisodes: params.seriesEpisodes,
+      },
+    });
+  }, [nextEpisode, seriesContext, router, setSeriesProgress, params.seriesEpisodes]);
 
   // Resolve redirects
   useEffect(() => {
     isMountedRef.current = true;
     if (!decodedUrl) {
-      setError('URL do vídeo não recebida');
-      setDebugInfo('URL vazia - nenhum parâmetro recebido');
+      setError('URL do video nao recebida');
+      setDebugInfo('URL vazia - nenhum parametro recebido');
       setIsLoading(false);
       return;
     }
@@ -106,6 +183,7 @@ export default function TVMediaPlayerScreen() {
   // Expo Video player
   const player = useVideoPlayer(null, (p) => {
     p.staysActiveInBackground = true;
+    p.timeUpdateEventInterval = 0.5;
   });
 
   // When URL is resolved, load and play
@@ -113,7 +191,7 @@ export default function TVMediaPlayerScreen() {
     if (!resolvedUrl) return;
     player.replace(resolvedUrl);
     player.play();
-  }, [resolvedUrl]);
+  }, [resolvedUrl, player]);
 
   // Player listeners
   useEffect(() => {
@@ -168,7 +246,7 @@ export default function TVMediaPlayerScreen() {
       return true;
     });
     return () => handler.remove();
-  }, []);
+  }, [handleClose]);
 
   const handleClose = useCallback(async () => {
     isMountedRef.current = false;
@@ -209,6 +287,63 @@ export default function TVMediaPlayerScreen() {
     else resetHideTimer();
   };
 
+  // D-pad / Remote key handler
+  const { setMode } = useTVKeyHandler(
+    (event) => {
+      if (showControls) {
+        // Controls visible → passthrough mode handles D-pad focus navigation
+        // Only intercept specific keys that should trigger actions
+        switch (event.eventType) {
+          case 'playPause':
+            togglePlayPause();
+            break;
+          case 'down':
+            // If user presses down while controls are visible, hide them
+            setShowControls(false);
+            break;
+          case 'menu':
+            // Do nothing
+            break;
+        }
+        return;
+      }
+
+      // Controls hidden → intercept mode, handle all keys directly
+      switch (event.eventType) {
+        case 'left':
+        case 'rewind':
+          handleSkipBackward();
+          break;
+        case 'right':
+        case 'fastForward':
+          handleSkipForward();
+          break;
+        case 'select':
+        case 'playPause':
+          togglePlayPause();
+          break;
+        case 'up':
+          resetHideTimer();
+          break;
+        case 'down':
+          resetHideTimer();
+          break;
+        case 'menu':
+          // Explicitly do nothing as per requirements
+          break;
+      }
+    },
+  );
+
+  // Switch D-pad mode based on controls visibility
+  useEffect(() => {
+    if (showControls) {
+      setMode('passthrough');
+    } else {
+      setMode('intercept');
+    }
+  }, [showControls, setMode]);
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -232,7 +367,7 @@ export default function TVMediaPlayerScreen() {
         <View style={styles.overlay}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>
-            {resolvedUrl ? 'Carregando vídeo...' : 'Resolvendo link...'}
+            {resolvedUrl ? 'Carregando video...' : 'Resolvendo link...'}
           </Text>
         </View>
       )}
@@ -247,8 +382,9 @@ export default function TVMediaPlayerScreen() {
             <Text style={styles.debugText} selectable>ID: {id || '(vazio)'}</Text>
             <Text style={styles.debugText} selectable>{debugInfo}</Text>
           </View>
-          <Pressable
-            style={({ focused }) => [styles.retryButton, focused && styles.buttonFocused]}
+          <TVPressable
+            style={styles.retryButton}
+            focusScale={1.08}
             onPress={() => {
               setError(null); setResolvedUrl(null);
               setIsLoading(true); setRetryKey(k => k + 1);
@@ -256,7 +392,7 @@ export default function TVMediaPlayerScreen() {
           >
             <Ionicons name="refresh" size={24} color="#000" />
             <Text style={styles.retryText}>Tentar novamente</Text>
-          </Pressable>
+          </TVPressable>
         </View>
       )}
 
@@ -265,40 +401,59 @@ export default function TVMediaPlayerScreen() {
         <View style={styles.controls}>
           {/* Top Bar */}
           <View style={styles.topBar}>
-            <Pressable
-              style={({ focused }) => [styles.closeButton, focused && styles.buttonFocused]}
+            <TVPressable
+              style={styles.closeButton}
+              focusScale={1.15}
               onPress={handleClose}
             >
               <Ionicons name="arrow-back" size={28} color="white" />
-            </Pressable>
+            </TVPressable>
             <Text style={styles.title} numberOfLines={1}>{title || 'Reproduzindo'}</Text>
-            <View style={{ width: 50 }} />
+            {nextEpisode && (
+              <TVPressable
+                style={styles.nextEpisodeButton}
+                focusedStyle={styles.nextEpisodeFocused}
+                focusScale={1.1}
+                onPress={handleNextEpisode}
+              >
+                <Ionicons name="play-skip-forward" size={22} color={Colors.text} />
+                <Text style={styles.nextEpisodeText}>
+                  T{nextEpisode.season} E{nextEpisode.episode.episode}
+                </Text>
+              </TVPressable>
+            )}
+            {!nextEpisode && <View style={{ width: 50 }} />}
           </View>
 
           {/* Center Controls */}
           <View style={styles.centerControls}>
-            <Pressable
-              style={({ focused }) => [styles.skipButton, focused && styles.buttonFocused]}
+            <TVPressable
+              style={styles.skipButton}
+              focusScale={1.1}
               onPress={handleSkipBackward}
             >
               <Ionicons name="play-back" size={40} color="white" />
               <Text style={styles.skipText}>10s</Text>
-            </Pressable>
+            </TVPressable>
 
-            <Pressable
-              style={({ focused }) => [styles.playButton, focused && styles.playButtonFocused]}
+            <TVPressable
+              style={styles.playButton}
+              focusedStyle={styles.playButtonFocused}
+              focusScale={1.15}
               onPress={togglePlayPause}
+              hasTVPreferredFocus
             >
               <Ionicons name={isPlaying ? 'pause' : 'play'} size={56} color="white" />
-            </Pressable>
+            </TVPressable>
 
-            <Pressable
-              style={({ focused }) => [styles.skipButton, focused && styles.buttonFocused]}
+            <TVPressable
+              style={styles.skipButton}
+              focusScale={1.1}
               onPress={handleSkipForward}
             >
               <Ionicons name="play-forward" size={40} color="white" />
               <Text style={styles.skipText}>10s</Text>
-            </Pressable>
+            </TVPressable>
           </View>
 
           {/* Bottom Bar */}
@@ -341,7 +496,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md, marginTop: Spacing.lg, gap: Spacing.sm,
   },
   retryText: { color: '#000', fontWeight: '600', fontSize: Typography.body.fontSize },
-  buttonFocused: { borderWidth: 3, borderColor: Colors.text, borderRadius: BorderRadius.lg },
+  buttonFocused: { backgroundColor: 'rgba(99,102,241,0.3)' },
   debugContainer: {
     backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12,
     padding: Spacing.lg, marginTop: Spacing.lg, marginHorizontal: Spacing.xl, maxWidth: '80%',
@@ -361,7 +516,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '600', textAlign: 'center', marginHorizontal: Spacing.md },
   centerControls: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.xxxl },
   playButton: { backgroundColor: 'rgba(0,0,0,0.6)', padding: Spacing.xl, borderRadius: BorderRadius.full },
-  playButtonFocused: { backgroundColor: 'rgba(99,102,241,0.4)', borderWidth: 3, borderColor: Colors.primary },
+  playButtonFocused: { backgroundColor: 'rgba(99,102,241,0.4)' },
   skipButton: { alignItems: 'center', padding: Spacing.lg, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: BorderRadius.lg },
   skipText: { color: Colors.text, fontSize: Typography.caption.fontSize, marginTop: 4 },
   bottomBar: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg },
@@ -372,4 +527,16 @@ const styles = StyleSheet.create({
   progressBarBg: { width: '100%', height: 8, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 4, position: 'relative' },
   progressBarFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 4 },
   progressThumb: { position: 'absolute', width: 20, height: 20, backgroundColor: Colors.primary, borderRadius: 10, top: -6, marginLeft: -10 },
+  // Next Episode Button
+  nextEpisodeButton: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(99,102,241,0.3)',
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.lg, gap: Spacing.xs,
+    borderWidth: 2, borderColor: 'transparent',
+  },
+  nextEpisodeFocused: {
+    backgroundColor: 'rgba(99,102,241,0.6)',
+  },
+  nextEpisodeText: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600' },
 });

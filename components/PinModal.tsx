@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Spacing, Typography, Shadows, scale } from '../constants/Colors';
+import TVPressable from './TVPressable';
 import { useSettingsStore } from '../stores/settingsStore';
 
 interface PinModalProps {
@@ -105,9 +106,9 @@ export default function PinModal({ visible, onClose, onSuccess, mode = 'verify' 
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
-          <Pressable style={({ focused }) => [styles.closeButton, focused && styles.closeFocused]} onPress={onClose}>
+          <TVPressable style={styles.closeButton} focusedStyle={styles.closeFocused} focusScale={1.15} onPress={onClose}>
             <Ionicons name="close" size={28} color={Colors.text} />
-          </Pressable>
+          </TVPressable>
           <Ionicons name="lock-closed" size={48} color={Colors.primary} />
           <Text style={styles.title}>{getTitle()}</Text>
           <Text style={styles.subtitle}>{mode === 'verify' ? 'Conteúdo restrito' : 'Digite 4 dígitos'}</Text>
@@ -121,14 +122,14 @@ export default function PinModal({ visible, onClose, onSuccess, mode = 'verify' 
             {digits.map((digit, index) => {
               if (digit === '') return <View key={index} style={styles.keyEmpty} />;
               if (digit === 'del') return (
-                <Pressable key={index} style={({ focused }) => [styles.key, focused && styles.keyFocused]} onPress={handleDelete}>
+                <TVPressable key={index} style={styles.key} focusedStyle={styles.keyFocused} focusScale={1.1} onPress={handleDelete}>
                   <Ionicons name="backspace-outline" size={28} color={Colors.text} />
-                </Pressable>
+                </TVPressable>
               );
               return (
-                <Pressable key={index} style={({ focused }) => [styles.key, focused && styles.keyFocused]} onPress={() => handleKeyPress(digit)}>
+                <TVPressable key={index} style={styles.key} focusedStyle={styles.keyFocused} focusScale={1.1} onPress={() => handleKeyPress(digit)}>
                   <Text style={styles.keyText}>{digit}</Text>
-                </Pressable>
+                </TVPressable>
               );
             })}
           </View>
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)' },
   container: { backgroundColor: Colors.surface, borderRadius: BorderRadius.xl, padding: Spacing.xxl, alignItems: 'center', width: scale(420), ...Shadows.lg },
   closeButton: { position: 'absolute', top: Spacing.md, right: Spacing.md, padding: Spacing.sm },
-  closeFocused: { backgroundColor: Colors.surfaceHover, borderRadius: BorderRadius.full },
+  closeFocused: { backgroundColor: 'rgba(99,102,241,0.3)', borderRadius: BorderRadius.full },
   title: { color: Colors.text, fontSize: Typography.h2.fontSize, fontWeight: '700', marginTop: Spacing.lg, marginBottom: Spacing.xs },
   subtitle: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, textAlign: 'center', marginBottom: Spacing.xl },
   dotsContainer: { flexDirection: 'row', gap: Spacing.lg, marginBottom: Spacing.lg },
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
   error: { color: Colors.error, fontSize: Typography.caption.fontSize, marginBottom: Spacing.md },
   keypad: { flexDirection: 'row', flexWrap: 'wrap', width: scale(300), justifyContent: 'center', gap: Spacing.md },
   key: { width: scale(80), height: scale(80), borderRadius: BorderRadius.full, backgroundColor: Colors.surfaceVariant, justifyContent: 'center', alignItems: 'center' },
-  keyFocused: { backgroundColor: Colors.primary, borderWidth: 2, borderColor: Colors.text },
+  keyFocused: { backgroundColor: Colors.primary },
   keyEmpty: { width: scale(80), height: scale(80) },
   keyText: { color: Colors.text, fontSize: scale(28), fontWeight: '600' },
 });

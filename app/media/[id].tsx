@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Pressable,
   ActivityIndicator,
   FlatList,
 } from 'react-native';
@@ -15,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius, scale, SCREEN } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { getMediaById } from '../../services/mediaService';
 import { useMediaStore } from '../../stores/mediaStore';
 import type { MediaItem, CastMember } from '../../types';
@@ -89,12 +89,13 @@ export default function TVMediaDetailScreen() {
       <View style={[styles.container, styles.center]}>
         <Ionicons name="film-outline" size={80} color={Colors.textSecondary} />
         <Text style={styles.errorText}>Conteúdo não encontrado</Text>
-        <Pressable
-          style={({ focused }) => [styles.backBtn, focused && styles.btnFocused]}
+        <TVPressable
+          style={styles.backBtn}
+          focusScale={1.08}
           onPress={handleBack}
         >
           <Text style={styles.backBtnText}>Voltar</Text>
-        </Pressable>
+        </TVPressable>
       </View>
     );
   }
@@ -120,12 +121,13 @@ export default function TVMediaDetailScreen() {
           />
 
           {/* Back */}
-          <Pressable
-            style={({ focused }) => [styles.headerButton, focused && styles.btnFocused]}
+          <TVPressable
+            style={styles.headerButton}
+            focusScale={1.15}
             onPress={handleBack}
           >
             <Ionicons name="arrow-back" size={28} color={Colors.text} />
-          </Pressable>
+          </TVPressable>
 
           {/* Content over hero */}
           <View style={styles.heroContent}>
@@ -184,20 +186,26 @@ export default function TVMediaDetailScreen() {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <Pressable
-            style={({ focused }) => [styles.playButton, focused && styles.playButtonFocused]}
+          <TVPressable
+            outerStyle={{ flex: 1 }}
+            style={styles.playButton}
+            focusedStyle={styles.playButtonFocused}
+            focusScale={1.05}
+            focusBorderColor="#ffffff"
             onPress={handlePlay}
+            hasTVPreferredFocus
           >
             <Ionicons name="play" size={28} color="#000" />
             <Text style={styles.playText}>Assistir</Text>
-          </Pressable>
+          </TVPressable>
 
-          <Pressable
-            style={({ focused }) => [
+          <TVPressable
+            style={[
               styles.iconButton,
               favorite && styles.iconButtonActive,
-              focused && styles.btnFocused,
             ]}
+            focusedStyle={styles.favBtnFocused}
+            focusScale={1.1}
             onPress={handleFavorite}
           >
             <Ionicons
@@ -205,7 +213,7 @@ export default function TVMediaDetailScreen() {
               size={28}
               color={favorite ? '#FF4757' : Colors.text}
             />
-          </Pressable>
+          </TVPressable>
         </View>
 
         {/* Genres */}
@@ -238,8 +246,10 @@ export default function TVMediaDetailScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: Spacing.xl }}
               renderItem={({ item: actor }) => (
-                <Pressable
-                  style={({ focused }) => [styles.castCard, focused && styles.castCardFocused]}
+                <TVPressable
+                  style={styles.castCard}
+                  focusedStyle={styles.castCardFocused}
+                  focusScale={1.1}
                   onPress={() => handleActorPress(actor)}
                 >
                   <Image
@@ -250,7 +260,7 @@ export default function TVMediaDetailScreen() {
                   />
                   <Text style={styles.castName} numberOfLines={1}>{actor.name}</Text>
                   <Text style={styles.castCharacter} numberOfLines={1}>{actor.character}</Text>
-                </Pressable>
+                </TVPressable>
               )}
             />
           </View>
@@ -292,11 +302,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.lg, gap: Spacing.md,
   },
-  playButtonFocused: { borderWidth: 3, borderColor: Colors.text },
+  playButtonFocused: { backgroundColor: 'rgba(255,255,255,0.2)' },
   playText: { color: '#000', fontSize: Typography.body.fontSize, fontWeight: '700' },
-  iconButton: { backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: BorderRadius.lg },
+  iconButton: { backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: BorderRadius.lg, borderWidth: 3, borderColor: 'transparent' },
   iconButtonActive: { backgroundColor: 'rgba(255,71,87,0.2)' },
-  btnFocused: { borderWidth: 3, borderColor: Colors.primary, borderRadius: BorderRadius.lg },
+  favBtnFocused: { backgroundColor: 'rgba(99,102,241,0.3)' },
   genres: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
   genreChip: { backgroundColor: Colors.surface, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
   genreText: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize },
@@ -304,7 +314,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700', paddingHorizontal: Spacing.xl, marginBottom: Spacing.md },
   overview: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, lineHeight: 28, paddingHorizontal: Spacing.xl },
   castCard: { width: scale(100), marginRight: Spacing.lg, alignItems: 'center' },
-  castCardFocused: { borderWidth: 2, borderColor: Colors.primary, borderRadius: BorderRadius.lg, padding: 4 },
+  castCardFocused: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: BorderRadius.lg, padding: 4 },
   castPhoto: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.surface },
   castName: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
   castCharacter: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center' },

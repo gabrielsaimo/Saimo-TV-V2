@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Pressable,
   ActivityIndicator,
   FlatList,
 } from 'react-native';
@@ -15,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius, scale, SCREEN } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { getSeriesById } from '../../services/mediaService';
 import { useMediaStore } from '../../stores/mediaStore';
 import type { SeriesItem, Episode, CastMember } from '../../types';
@@ -76,6 +76,11 @@ export default function TVSeriesDetailScreen() {
         id: ep.id,
         url: encodeURIComponent(ep.url),
         title: `${series.name} - T${season} E${ep.episode}`,
+        seriesId: series.id,
+        season: season,
+        episode: ep.episode.toString(),
+        seriesName: series.name,
+        seriesEpisodes: encodeURIComponent(JSON.stringify(series.episodes)),
       },
     });
   }, [series, router, setSeriesProgress]);
@@ -107,12 +112,13 @@ export default function TVSeriesDetailScreen() {
       <View style={[styles.container, styles.center]}>
         <Ionicons name="tv-outline" size={80} color={Colors.textSecondary} />
         <Text style={styles.errorText}>Série não encontrada</Text>
-        <Pressable
-          style={({ focused }) => [styles.backBtn, focused && styles.btnFocused]}
+        <TVPressable
+          style={styles.backBtn}
+          focusScale={1.08}
           onPress={handleBack}
         >
           <Text style={styles.backBtnText}>Voltar</Text>
-        </Pressable>
+        </TVPressable>
       </View>
     );
   }
@@ -138,12 +144,13 @@ export default function TVSeriesDetailScreen() {
             style={styles.heroGradient}
           />
 
-          <Pressable
-            style={({ focused }) => [styles.headerButton, focused && styles.btnFocused]}
+          <TVPressable
+            style={styles.headerButton}
+            focusScale={1.15}
             onPress={handleBack}
           >
             <Ionicons name="arrow-back" size={28} color={Colors.text} />
-          </Pressable>
+          </TVPressable>
 
           <View style={styles.heroContent}>
             <Image
@@ -174,31 +181,40 @@ export default function TVSeriesDetailScreen() {
         {/* Actions */}
         <View style={styles.actions}>
           {progress ? (
-            <Pressable
-              style={({ focused }) => [styles.continueButton, focused && styles.playFocused]}
+            <TVPressable
+              outerStyle={{ flex: 1 }}
+              style={styles.continueButton}
+              focusedStyle={styles.playFocused}
+              focusScale={1.05}
+              focusBorderColor="#ffffff"
               onPress={handleContinue}
             >
               <Ionicons name="play" size={28} color="#000" />
               <Text style={styles.continueText}>
                 Continuar T{progress.season} E{progress.episode}
               </Text>
-            </Pressable>
+            </TVPressable>
           ) : (
-            <Pressable
-              style={({ focused }) => [styles.playButton, focused && styles.playFocused]}
+            <TVPressable
+              outerStyle={{ flex: 1 }}
+              style={styles.playButton}
+              focusedStyle={styles.playFocused}
+              focusScale={1.05}
+              focusBorderColor="#ffffff"
               onPress={() => episodes[0] && handlePlayEpisode(episodes[0], selectedSeason)}
             >
               <Ionicons name="play" size={28} color="#000" />
               <Text style={styles.playText}>Assistir</Text>
-            </Pressable>
+            </TVPressable>
           )}
 
-          <Pressable
-            style={({ focused }) => [
+          <TVPressable
+            style={[
               styles.iconButton,
               favorite && styles.iconButtonActive,
-              focused && styles.btnFocused,
             ]}
+            focusedStyle={styles.favBtnFocused}
+            focusScale={1.1}
             onPress={handleFavorite}
           >
             <Ionicons
@@ -206,7 +222,7 @@ export default function TVSeriesDetailScreen() {
               size={28}
               color={favorite ? '#FF4757' : Colors.text}
             />
-          </Pressable>
+          </TVPressable>
         </View>
 
         {/* Synopsis */}
@@ -228,8 +244,10 @@ export default function TVSeriesDetailScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: Spacing.xl }}
               renderItem={({ item: actor }) => (
-                <Pressable
-                  style={({ focused }) => [styles.castCard, focused && styles.castCardFocused]}
+                <TVPressable
+                  style={styles.castCard}
+                  focusedStyle={styles.castCardFocused}
+                  focusScale={1.1}
                   onPress={() => handleActorPress(actor)}
                 >
                   <Image
@@ -240,7 +258,7 @@ export default function TVSeriesDetailScreen() {
                   />
                   <Text style={styles.castName} numberOfLines={1}>{actor.name}</Text>
                   <Text style={styles.castCharacter} numberOfLines={1}>{actor.character}</Text>
-                </Pressable>
+                </TVPressable>
               )}
             />
           </View>
@@ -255,13 +273,14 @@ export default function TVSeriesDetailScreen() {
             contentContainerStyle={styles.seasonsRow}
           >
             {seasons.map((s) => (
-              <Pressable
+              <TVPressable
                 key={s}
-                style={({ focused }) => [
+                style={[
                   styles.seasonChip,
                   selectedSeason === s && styles.seasonChipActive,
-                  focused && styles.seasonChipFocused,
                 ]}
+                focusedStyle={styles.seasonChipFocused}
+                focusScale={1.1}
                 onPress={() => setSelectedSeason(s)}
               >
                 <Text style={[
@@ -270,7 +289,7 @@ export default function TVSeriesDetailScreen() {
                 ]}>
                   T{s}
                 </Text>
-              </Pressable>
+              </TVPressable>
             ))}
           </ScrollView>
         </View>
@@ -281,13 +300,14 @@ export default function TVSeriesDetailScreen() {
             Episódios ({episodes.length})
           </Text>
           {episodes.map((ep) => (
-            <Pressable
+            <TVPressable
               key={ep.id}
-              style={({ focused }) => [
+              style={[
                 styles.episodeCard,
                 progress?.episodeId === ep.id && styles.episodeCardActive,
-                focused && styles.episodeCardFocused,
               ]}
+              focusedStyle={styles.episodeCardFocused}
+              focusScale={1.02}
               onPress={() => handlePlayEpisode(ep, selectedSeason)}
             >
               <View style={styles.episodeNumber}>
@@ -302,7 +322,7 @@ export default function TVSeriesDetailScreen() {
                 )}
               </View>
               <Ionicons name="play-circle" size={36} color={Colors.primary} />
-            </Pressable>
+            </TVPressable>
           ))}
         </View>
 
@@ -343,12 +363,12 @@ const styles = StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: Colors.primary, paddingVertical: Spacing.lg, borderRadius: BorderRadius.lg, gap: Spacing.md,
   },
-  playFocused: { borderWidth: 3, borderColor: Colors.text },
+  playFocused: { backgroundColor: 'rgba(255,255,255,0.2)' },
   playText: { color: '#000', fontSize: Typography.body.fontSize, fontWeight: '700' },
   continueText: { color: '#000', fontSize: Typography.body.fontSize, fontWeight: '700' },
-  iconButton: { backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: BorderRadius.lg },
+  iconButton: { backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: BorderRadius.lg, borderWidth: 3, borderColor: 'transparent' },
   iconButtonActive: { backgroundColor: 'rgba(255,71,87,0.2)' },
-  btnFocused: { borderWidth: 3, borderColor: Colors.primary, borderRadius: BorderRadius.lg },
+  favBtnFocused: { backgroundColor: 'rgba(99,102,241,0.3)' },
   section: { marginTop: Spacing.xl, paddingHorizontal: Spacing.xl },
   sectionTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700', marginBottom: Spacing.md },
   overview: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, lineHeight: 28 },
@@ -358,16 +378,17 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full, backgroundColor: Colors.surface,
   },
   seasonChipActive: { backgroundColor: Colors.primary },
-  seasonChipFocused: { borderWidth: 3, borderColor: Colors.text },
+  seasonChipFocused: { backgroundColor: 'rgba(99,102,241,0.25)' },
   seasonChipText: { color: Colors.textSecondary, fontWeight: '600', fontSize: Typography.body.fontSize },
   seasonChipTextActive: { color: '#000' },
   episodeCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.surface, borderRadius: BorderRadius.lg,
     padding: Spacing.lg, marginBottom: Spacing.md, gap: Spacing.lg,
+    borderWidth: 3, borderColor: 'transparent',
   },
-  episodeCardActive: { borderWidth: 2, borderColor: Colors.primary },
-  episodeCardFocused: { borderWidth: 3, borderColor: Colors.primary, backgroundColor: Colors.surfaceHover },
+  episodeCardActive: { borderWidth: 3, borderColor: Colors.primary },
+  episodeCardFocused: { backgroundColor: 'rgba(99,102,241,0.15)' },
   episodeNumber: {
     width: scale(52), height: scale(52), borderRadius: BorderRadius.md,
     backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center',
@@ -377,7 +398,7 @@ const styles = StyleSheet.create({
   episodeName: { color: Colors.text, fontSize: Typography.body.fontSize, fontWeight: '500' },
   episodeContinue: { color: Colors.primary, fontSize: Typography.caption.fontSize, marginTop: 4 },
   castCard: { width: scale(100), marginRight: Spacing.lg, alignItems: 'center' },
-  castCardFocused: { borderWidth: 2, borderColor: Colors.primary, borderRadius: BorderRadius.lg, padding: 4 },
+  castCardFocused: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: BorderRadius.lg, padding: 4 },
   castPhoto: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.surface },
   castName: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
   castCharacter: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center' },

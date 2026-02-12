@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   Animated,
 } from 'react-native';
 import { Slot, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 
 const SIDEBAR_WIDTH = TV.sidebarWidth;
 const SIDEBAR_COLLAPSED = TV.sidebarCollapsedWidth;
@@ -67,13 +67,14 @@ export default function DrawerLayout() {
           {NAV_ITEMS.map((item, index) => {
             const active = isActive(item.route);
             return (
-              <Pressable
+              <TVPressable
                 key={item.route}
-                style={({ focused }) => [
+                style={[
                   styles.navItem,
                   active && styles.navItemActive,
-                  focused && styles.navItemFocused,
                 ]}
+                focusedStyle={styles.navItemFocused}
+                focusScale={1.05}
                 onPress={() => {
                   if (item.route === '/(drawer)') {
                     router.replace('/');
@@ -102,7 +103,7 @@ export default function DrawerLayout() {
                   </Text>
                 )}
                 {active && <View style={styles.activeIndicator} />}
-              </Pressable>
+              </TVPressable>
             );
           })}
         </View>
@@ -170,9 +171,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(99, 102, 241, 0.15)',
   },
   navItemFocused: {
-    backgroundColor: 'rgba(99, 102, 241, 0.25)',
-    borderWidth: 2,
-    borderColor: Colors.primary,
+    backgroundColor: 'rgba(99, 102, 241, 0.35)',
   },
   navLabel: {
     color: Colors.textSecondary,

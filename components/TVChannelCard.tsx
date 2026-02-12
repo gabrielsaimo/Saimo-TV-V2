@@ -40,10 +40,7 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
       if (isMountedRef.current && updatedId === channel.id && showEPG)
         setCurrentEPG(getCurrentProgram(channel.id));
     });
-    const interval = setInterval(() => {
-      if (isMountedRef.current && showEPG) setCurrentEPG(getCurrentProgram(channel.id));
-    }, 60000);
-    return () => { isMountedRef.current = false; unsubscribe(); clearInterval(interval); };
+    return () => { isMountedRef.current = false; unsubscribe(); };
   }, [channel.id, showEPG]);
 
   useEffect(() => { setFavorite(isFavorite(channel.id)); }, [isFavorite, channel.id]);
@@ -126,12 +123,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBg,
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: 'transparent',
   },
   containerFocused: {
     borderColor: Colors.primary,
-    elevation: 8,
+    elevation: 12,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
   },
   imageContainer: {
     width: '100%',

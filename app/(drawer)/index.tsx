@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Pressable,
   TextInput,
   InteractionManager,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { useChannelStore } from '../../stores/channelStore';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -52,7 +52,7 @@ export default function HomeScreen() {
     );
   }, [allChannels, searchQuery]);
 
-  // Prefetch EPG
+  // Prefetch EPG - non-blocking, never blocks UI
   useEffect(() => {
     if (channels.length > 0 && !prefetchedRef.current) {
       prefetchedRef.current = true;
@@ -60,17 +60,20 @@ export default function HomeScreen() {
       if (channelIds.length === 0) return;
 
       let cancelled = false;
+      // Use setTimeout chain instead of await loop to never block JS thread
+      let batchIndex = 0;
+      const loadNextBatch = () => {
+        if (cancelled || batchIndex >= channelIds.length) return;
+        const batch = channelIds.slice(batchIndex, batchIndex + 2);
+        batchIndex += 2;
+        // Fire and forget - don't await
+        prefetchEPG(batch).catch(() => {});
+        // Schedule next batch with generous delay to keep UI responsive
+        setTimeout(loadNextBatch, 500);
+      };
+      // Start after interactions settle
       const task = InteractionManager.runAfterInteractions(() => {
-        if (cancelled) return;
-        const loadAll = async () => {
-          for (let i = 0; i < channelIds.length; i += 3) {
-            if (cancelled) return;
-            const batch = channelIds.slice(i, i + 3);
-            await prefetchEPG(batch);
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-        };
-        loadAll();
+        if (!cancelled) setTimeout(loadNextBatch, 1000);
       });
 
       return () => {
@@ -110,12 +113,13 @@ export default function HomeScreen() {
           keyExtractor={(item) => item}
           contentContainerStyle={styles.categoryList}
           renderItem={({ item, index }) => (
-            <Pressable
-              style={({ focused }) => [
+            <TVPressable
+              style={[
                 styles.categoryChip,
                 selectedCategory === item && styles.categoryChipActive,
-                focused && styles.categoryChipFocused,
               ]}
+              focusedStyle={styles.categoryChipFocused}
+              focusScale={1.1}
               onPress={() => handleSelectCategory(item, index)}
             >
               <Text
@@ -126,7 +130,7 @@ export default function HomeScreen() {
               >
                 {item}
               </Text>
-            </Pressable>
+            </TVPressable>
           )}
         />
       </View>
@@ -188,9 +192,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   categoryChipFocused: {
-    borderWidth: 2,
-    borderColor: Colors.text,
-    backgroundColor: Colors.surfaceHover,
+    backgroundColor: 'rgba(99,102,241,0.25)',
   },
   categoryText: {
     color: Colors.textSecondary,

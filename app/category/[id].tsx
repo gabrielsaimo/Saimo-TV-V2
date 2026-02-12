@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Pressable,
   ActivityIndicator,
   FlatList,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { loadCategory, loadMoreForCategory } from '../../services/mediaService';
 import { categoryHasMore } from '../../services/streamingService';
 import { useMediaStore } from '../../stores/mediaStore';
@@ -100,12 +100,13 @@ export default function TVCategoryScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Pressable
-          style={({ focused }) => [styles.backButton, focused && styles.btnFocused]}
+        <TVPressable
+          style={styles.backButton}
+          focusScale={1.15}
           onPress={handleBack}
         >
           <Ionicons name="arrow-back" size={28} color={Colors.text} />
-        </Pressable>
+        </TVPressable>
         <View style={styles.titleContainer}>
           <Text style={styles.title}>{name || 'Categoria'}</Text>
           <Text style={styles.count}>
@@ -118,27 +119,29 @@ export default function TVCategoryScreen() {
       {/* Filter chips */}
       <View style={styles.filterRow}>
         {['all', 'movie', 'tv'].map((f) => (
-          <Pressable
+          <TVPressable
             key={f}
-            style={({ focused }) => [
+            style={[
               styles.filterChip,
               activeFilter === f && styles.filterChipActive,
-              focused && styles.filterChipFocused,
             ]}
+            focusedStyle={styles.filterChipFocused}
+            focusScale={1.1}
             onPress={() => setFilter(f as any)}
           >
             <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
               {f === 'all' ? 'Todos' : f === 'movie' ? 'Filmes' : 'Séries'}
             </Text>
-          </Pressable>
+          </TVPressable>
         ))}
         {activeFilter !== 'all' && (
-          <Pressable
-            style={({ focused }) => [styles.clearBtn, focused && styles.btnFocused]}
+          <TVPressable
+            style={styles.clearBtn}
+            focusScale={1.15}
             onPress={clearFilters}
           >
             <Ionicons name="close-circle" size={20} color={Colors.textSecondary} />
-          </Pressable>
+          </TVPressable>
         )}
       </View>
 
@@ -176,7 +179,7 @@ const styles = StyleSheet.create({
   titleContainer: { flex: 1, alignItems: 'center' },
   title: { color: Colors.text, fontSize: Typography.h2.fontSize, fontWeight: '700' },
   count: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize },
-  btnFocused: { borderWidth: 3, borderColor: Colors.primary, borderRadius: BorderRadius.full },
+  btnFocused: { backgroundColor: 'rgba(99,102,241,0.25)' },
   filterRow: {
     flexDirection: 'row', paddingHorizontal: Spacing.xl,
     marginBottom: Spacing.md, gap: Spacing.md,
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full, backgroundColor: Colors.surface,
   },
   filterChipActive: { backgroundColor: Colors.primary },
-  filterChipFocused: { borderWidth: 3, borderColor: Colors.text },
+  filterChipFocused: { backgroundColor: 'rgba(99,102,241,0.25)' },
   filterText: { color: Colors.textSecondary, fontWeight: '600', fontSize: Typography.caption.fontSize },
   filterTextActive: { color: '#000' },
   clearBtn: { padding: Spacing.md },

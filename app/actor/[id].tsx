@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Pressable,
   ActivityIndicator,
   FlatList,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius, TV, scale } from '../../constants/Colors';
+import TVPressable from '../../components/TVPressable';
 import { loadInitialCategories, getMediaByActor } from '../../services/mediaService';
 import type { MediaItem, CastMember } from '../../types';
 import TVMediaCard from '../../components/TVMediaCard';
@@ -75,12 +75,13 @@ export default function TVActorScreen() {
           <>
             {/* Header */}
             <View style={styles.header}>
-              <Pressable
-                style={({ focused }) => [styles.backButton, focused && styles.btnFocused]}
+              <TVPressable
+                style={styles.backButton}
+                focusScale={1.15}
                 onPress={handleBack}
               >
                 <Ionicons name="arrow-back" size={28} color={Colors.text} />
-              </Pressable>
+              </TVPressable>
               <Text style={styles.headerTitle}>Ator</Text>
               <View style={{ width: 52 }} />
             </View>
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.md,
   },
   backButton: { padding: Spacing.md, backgroundColor: Colors.surface, borderRadius: BorderRadius.full },
-  btnFocused: { borderWidth: 3, borderColor: Colors.primary, borderRadius: BorderRadius.full },
+  btnFocused: { backgroundColor: 'rgba(99,102,241,0.25)' },
   headerTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '600' },
   profile: { alignItems: 'center', paddingVertical: Spacing.xxl },
   photo: { width: scale(160), height: scale(160), borderRadius: scale(80), backgroundColor: Colors.surface },
