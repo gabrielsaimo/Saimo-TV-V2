@@ -46,27 +46,26 @@ function ensureDisk(): boolean {
     }
 }
 
-/** Save page to disk (synchronous — file.write is sync in v19) */
+/** Save page to disk — deferred to next event loop tick to avoid blocking JS thread */
 function diskSave(key: string, items: MediaItem[]): void {
-    try {
-        if (!ensureDisk()) return;
-        const dir = getDiskDir();
-        const file = new FSFile(dir, `${key}.json`);
-        const content = JSON.stringify(items);
-        // Always use overwrite:true — safely handles both new and existing files
-        // Without this, create() throws if file already exists (race condition with parallel batches)
-        file.create({ overwrite: true });
-        file.write(content);
-        // Verify the write actually persisted
-        if (!file.exists || file.size === 0) {
-            console.warn('[DiskCache] diskSave verify FAILED:', key, 'exists:', file.exists, 'size:', file.size);
+    // setTimeout(0) garante que a escrita em disco não bloqueia o tick atual
+    // Crítico no Fire TV Lite: file.write() é síncrono e pode levar 20-50ms por página
+    setTimeout(() => {
+        try {
+            if (!ensureDisk()) return;
+            const dir = getDiskDir();
+            const file = new FSFile(dir, `${key}.json`);
+            const content = JSON.stringify(items);
+            // Always use overwrite:true — safely handles both new and existing files
+            file.create({ overwrite: true });
+            file.write(content);
+        } catch (e) {
+            console.warn('[DiskCache] diskSave failed:', key, e);
         }
-    } catch (e) {
-        console.warn('[DiskCache] diskSave failed:', key, e);
-    }
+    }, 0);
 }
 
-/** Read page from disk (sync for speed — no async overhead) */
+/** Read page from disk (sync — only used during fetch cache-hit path) */
 function diskLoad(key: string): MediaItem[] | null {
     try {
         if (!ensureDisk()) return null;
@@ -74,7 +73,6 @@ function diskLoad(key: string): MediaItem[] | null {
         const file = new FSFile(dir, `${key}.json`);
         if (!file.exists) return null;
         if (file.size === 0) return null;
-        // Use textSync() for faster reads — no Promise overhead
         const raw = file.textSync();
         if (!raw || raw.length < 2) return null;
         return JSON.parse(raw);
@@ -84,12 +82,29 @@ function diskLoad(key: string): MediaItem[] | null {
     }
 }
 
+/** Async disk read — non-blocking, used by hydrateFromDisk */
+async function diskLoadAsync(key: string): Promise<MediaItem[] | null> {
+    try {
+        if (!ensureDisk()) return null;
+        const dir = getDiskDir();
+        const file = new FSFile(dir, `${key}.json`);
+        if (!file.exists) return null;
+        if (file.size === 0) return null;
+        const raw = await file.text();
+        if (!raw || raw.length < 2) return null;
+        return JSON.parse(raw);
+    } catch (e) {
+        console.warn('[DiskCache] diskLoadAsync failed:', key, e);
+        return null;
+    }
+}
+
 /**
- * Hydrate ALL pages from disk for instant startup display.
- * Restores the full catalog if it was previously cached.
+ * Hydrate ALL pages from disk — async, non-blocking.
+ * Yields every 5 categories to keep D-pad responsive during hydration.
  * Returns true if any data was restored.
  */
-export function hydrateFromDisk(): boolean {
+export async function hydrateFromDisk(): Promise<boolean> {
     if (!ensureDisk()) {
         console.warn('[DiskCache] Hydration skipped — disk unavailable');
         return false;
@@ -99,21 +114,21 @@ export function hydrateFromDisk(): boolean {
     let count = 0;
     let totalItems = 0;
 
-    for (const cat of CATEGORIES) {
-        // Restore ALL pages for this category (p1, p2, p3, ...)
+    for (let i = 0; i < CATEGORIES.length; i++) {
+        const cat = CATEGORIES[i];
+
         let page = 1;
         let catItems: MediaItem[] = [];
 
         while (true) {
             const key = `${cat.id}-p${page}`;
             if (PAGE_CACHE.has(key)) {
-                // Already in memory, still count it
                 catItems.push(...(PAGE_CACHE.get(key) || []));
                 page++;
                 continue;
             }
 
-            const items = diskLoad(key);
+            const items = await diskLoadAsync(key);
             if (!items || items.length === 0) break;
 
             PAGE_CACHE.set(key, items);
@@ -125,11 +140,15 @@ export function hydrateFromDisk(): boolean {
         if (catItems.length > 0) {
             CATEGORY_CACHE.set(cat.id, deduplicateItems(catItems));
             LAST_PAGE.set(cat.id, page - 1);
-            // If last page had full 50 items, there might be more
             const lastPageItems = PAGE_CACHE.get(`${cat.id}-p${page - 1}`);
             HAS_MORE.set(cat.id, lastPageItems ? lastPageItems.length >= 50 : false);
             count++;
             totalItems += catItems.length;
+        }
+
+        // Yield every 5 categories to let D-pad events and renders through
+        if ((i + 1) % 5 === 0) {
+            await new Promise(r => setTimeout(r, 0));
         }
     }
 
@@ -385,23 +404,27 @@ export async function loadAllPagesForCategory(categoryId: string): Promise<Media
 /**
  * Busca em todas as categorias carregadas em memória
  */
-export function searchInLoadedData(query: string): MediaItem[] {
+export function searchInLoadedData(query: string, maxResults = 200): MediaItem[] {
     const normalized = query.toLowerCase().trim();
     if (!normalized) return [];
 
     const results: MediaItem[] = [];
-    const seen = new Set<string>();
+    const seenIds = new Set<string>();
+    const seenTitles = new Set<string>();
 
-    CATEGORY_CACHE.forEach((items) => {
+    for (const items of CATEGORY_CACHE.values()) {
         for (const item of items) {
-            if (seen.has(item.id)) continue;
-            const title = (item.tmdb?.title || item.name).toLowerCase();
+            if (seenIds.has(item.id)) continue;
+            const title = (item.tmdb?.title || item.name).toLowerCase().trim();
+            if (seenTitles.has(title)) continue;
             if (title.includes(normalized)) {
                 results.push(item);
-                seen.add(item.id);
+                seenIds.add(item.id);
+                seenTitles.add(title);
+                if (results.length >= maxResults) return results;
             }
         }
-    });
+    }
 
     return results;
 }
@@ -485,9 +508,9 @@ export function isLoadingInBackground(): boolean {
     return isBackgroundLoading;
 }
 
-const BG_PARALLEL = 2;       // categorias em paralelo no background
-const BG_PAGE_DELAY = 100;   // ms entre páginas (curto pq é background)
-const BG_CAT_DELAY = 50;     // ms entre categorias
+const BG_PARALLEL = 1;       // 1 categoria por vez — menos pressão de CPU/IO no Fire TV Lite
+const BG_PAGE_DELAY = 300;   // ms entre páginas — mais respiro para navegação D-pad
+const BG_CAT_DELAY = 150;    // ms entre categorias
 
 export async function startBackgroundLoading(
     onNewData?: () => void

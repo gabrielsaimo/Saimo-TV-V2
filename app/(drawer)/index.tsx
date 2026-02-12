@@ -3,27 +3,28 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   FlatList,
-  TextInput,
-  InteractionManager,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
 import TVPressable from '../../components/TVPressable';
 import { useChannelStore } from '../../stores/channelStore';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { initEPGService, prefetchEPG, hasEPGMapping } from '../../services/epgService';
+import {
+  initEPGService,
+  prefetchEPG,
+  hasEPGMapping,
+  setEPGTotalChannels,
+  onEPGProgress,
+} from '../../services/epgService';
 import type { Channel } from '../../types';
 import TVChannelCard from '../../components/TVChannelCard';
 
 export default function HomeScreen() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
+  const [epgProgress, setEpgProgress] = useState<{ loaded: number; total: number } | null>(null);
   const prefetchedRef = useRef(false);
 
   const {
@@ -40,6 +41,14 @@ export default function HomeScreen() {
     initEPGService();
   }, []);
 
+  // Assinar progresso de carregamento dos EPGs
+  useEffect(() => {
+    const unsubscribe = onEPGProgress((loaded, total) => {
+      setEpgProgress({ loaded, total });
+    });
+    return unsubscribe;
+  }, []);
+
   const categories = getCategories(adultUnlocked);
   const allChannels = getFilteredChannels(adultUnlocked, favorites);
 
@@ -52,56 +61,73 @@ export default function HomeScreen() {
     );
   }, [allChannels, searchQuery]);
 
-  // Prefetch EPG - non-blocking, never blocks UI
+  // Prefetch EPG - non-blocking, nunca bloqueia UI
   useEffect(() => {
     if (channels.length > 0 && !prefetchedRef.current) {
       prefetchedRef.current = true;
       const channelIds = channels.filter(c => hasEPGMapping(c.id)).map(c => c.id);
       if (channelIds.length === 0) return;
 
+      // Registra total para mostrar progresso
+      setEPGTotalChannels(channelIds.length);
+
       let cancelled = false;
-      // Use setTimeout chain instead of await loop to never block JS thread
+      // setTimeout chain em vez de await loop para nunca bloquear o JS thread
       let batchIndex = 0;
       const loadNextBatch = () => {
         if (cancelled || batchIndex >= channelIds.length) return;
         const batch = channelIds.slice(batchIndex, batchIndex + 2);
         batchIndex += 2;
-        // Fire and forget - don't await
         prefetchEPG(batch).catch(() => {});
-        // Schedule next batch with generous delay to keep UI responsive
-        setTimeout(loadNextBatch, 500);
+        // Delay generoso entre batches para manter navegação D-pad fluida
+        setTimeout(loadNextBatch, 600);
       };
-      // Start after interactions settle
-      const task = InteractionManager.runAfterInteractions(() => {
-        if (!cancelled) setTimeout(loadNextBatch, 1000);
-      });
+      // Só começa após a UI estar pronta (1.5s após montar)
+      const timerId = setTimeout(() => {
+        if (!cancelled) loadNextBatch();
+      }, 1500);
 
       return () => {
         cancelled = true;
-        task.cancel();
+        clearTimeout(timerId);
       };
     }
   }, [channels]);
 
-  const handleSelectCategory = useCallback((category: string, index: number) => {
+  const handleSelectCategory = useCallback((category: string) => {
     setCategory(category as any);
-    setSelectedCategoryIndex(index);
     setSearchQuery('');
     prefetchedRef.current = false;
   }, [setCategory]);
 
-  const renderChannel = useCallback(({ item }: { item: Channel }) => (
-    <TVChannelCard channel={item} />
-  ), []);
+  const channelRows = useMemo(() => {
+    const rows: Channel[][] = [];
+    for (let i = 0; i < channels.length; i += TV.channelColumns) {
+      rows.push(channels.slice(i, i + TV.channelColumns));
+    }
+    return rows;
+  }, [channels]);
 
-  const keyExtractor = useCallback((item: Channel) => item.id, []);
+  // Mostra progresso se ainda carregando e total > 0
+  const showEpgProgress = epgProgress !== null && epgProgress.loaded < epgProgress.total;
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>TV ao Vivo</Text>
-        <Text style={styles.subtitle}>{channels.length} canais</Text>
+        <View>
+          <Text style={styles.title}>TV ao Vivo</Text>
+          <Text style={styles.subtitle}>{channels.length} canais</Text>
+        </View>
+        {/* Indicador de progresso EPG */}
+        {showEpgProgress && (
+          <View style={styles.epgBadge}>
+            <View style={styles.epgDot} />
+            <Text style={styles.epgBadgeText}>
+              EPG {epgProgress!.loaded}/{epgProgress!.total}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Category Bar */}
@@ -112,7 +138,7 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item}
           contentContainerStyle={styles.categoryList}
-          renderItem={({ item, index }) => (
+          renderItem={({ item }) => (
             <TVPressable
               style={[
                 styles.categoryChip,
@@ -120,7 +146,7 @@ export default function HomeScreen() {
               ]}
               focusedStyle={styles.categoryChipFocused}
               focusScale={1.1}
-              onPress={() => handleSelectCategory(item, index)}
+              onPress={() => handleSelectCategory(item)}
             >
               <Text
                 style={[
@@ -136,19 +162,18 @@ export default function HomeScreen() {
       </View>
 
       {/* Channel Grid */}
-      <FlatList
-        data={channels}
-        keyExtractor={keyExtractor}
-        numColumns={TV.channelColumns}
-        renderItem={renderChannel}
+      <ScrollView
         contentContainerStyle={styles.grid}
-        columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={12}
-        maxToRenderPerBatch={8}
-        windowSize={5}
-        removeClippedSubviews
-      />
+      >
+        {channelRows.map((row, rowIndex) => (
+          <View key={rowIndex} style={styles.gridRow}>
+            {row.map(channel => (
+              <TVChannelCard key={channel.id} channel={channel} />
+            ))}
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -162,6 +187,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   title: {
     color: Colors.text,
@@ -173,13 +201,37 @@ const styles = StyleSheet.create({
     fontSize: Typography.caption.fontSize,
     marginTop: 4,
   },
+  epgBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    alignSelf: 'center',
+  },
+  epgDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+    // Pisca visualmente indicando carregamento ativo
+  },
+  epgBadgeText: {
+    color: Colors.textSecondary,
+    fontSize: Typography.label.fontSize,
+    fontWeight: '600',
+  },
   categoryBar: {
+    paddingTop: Spacing.xs,
     paddingBottom: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   categoryList: {
     paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
     gap: Spacing.sm,
   },
   categoryChip: {
@@ -207,6 +259,7 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
   },
   gridRow: {
+    flexDirection: 'row',
     gap: Spacing.lg,
     marginBottom: Spacing.lg,
   },

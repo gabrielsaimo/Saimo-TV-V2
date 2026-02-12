@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   FlatList,
   TextInput,
   ActivityIndicator,
@@ -13,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
 import TVPressable from '../../components/TVPressable';
 import { useMediaStore } from '../../stores/mediaStore';
-import { filterMedia, sortMedia, getAllGenres } from '../../services/mediaService';
+import { filterMedia, sortMedia } from '../../services/mediaService';
 import {
   CATEGORIES,
   fetchCategoryPage,
@@ -24,10 +25,9 @@ import {
   getTotalLoadedCount,
   clearAllCaches,
   searchInLoadedData,
-  hydrateFromDisk,
 } from '../../services/streamingService';
 import { useSettingsStore } from '../../stores/settingsStore';
-import type { MediaItem } from '../../types';
+import type { MediaItem, MediaFilterType, MediaSortType } from '../../types';
 import TVMediaCard from '../../components/TVMediaCard';
 import TVMediaRow from '../../components/TVMediaRow';
 
@@ -37,9 +37,9 @@ const ADULT_CATEGORY_IDS = [
   'hot-adultos',
 ];
 
-const BG_SYNC_INTERVAL = 5000;
+const BG_SYNC_INTERVAL = 12000;
 const SEARCH_DEBOUNCE = 600;
-const MAX_GRID_RESULTS = 500;
+const MAX_GRID_RESULTS = 200;
 
 type CategoryRowData = {
   id: string;
@@ -47,10 +47,24 @@ type CategoryRowData = {
   items: MediaItem[];
 };
 
+const TYPE_FILTERS: { key: MediaFilterType; label: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'movie', label: 'Filmes' },
+  { key: 'tv', label: 'Séries' },
+];
+
+const SORT_OPTIONS: { key: MediaSortType; label: string; icon: string }[] = [
+  { key: 'rating', label: 'Nota', icon: 'star' },
+  { key: 'popularity', label: 'Populares', icon: 'trending-up' },
+  { key: 'year', label: 'Recentes', icon: 'calendar' },
+  { key: 'name', label: 'A-Z', icon: 'text' },
+];
+
 export default function MoviesScreen() {
-  const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<Map<string, MediaItem[]>>(new Map());
-  const [totalLoaded, setTotalLoaded] = useState(0);
+  // Initialize state directly from cache for instant display
+  const [loading, setLoading] = useState(() => getAllLoadedCategories().size === 0);
+  const [categories, setCategories] = useState<Map<string, MediaItem[]>>(() => getAllLoadedCategories());
+  const [totalLoaded, setTotalLoaded] = useState(() => getTotalLoadedCount());
   const [bgLoading, setBgLoading] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -70,6 +84,10 @@ export default function MoviesScreen() {
   const catalogLoadedRef = useRef(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSearchActiveRef = useRef(false);
+  const totalLoadedRef = useRef(totalLoaded);
+  // Refs de cache: declarados ANTES dos useMemo que os usam (evita TDZ ReferenceError)
+  const allItemsCacheRef = useRef<{ size: number; items: MediaItem[] }>({ size: -1, items: [] });
+  const genresCacheRef = useRef<{ size: number; genres: string[] }>({ size: 0, genres: [] });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -128,13 +146,17 @@ export default function MoviesScreen() {
 
   useEffect(() => { loadCatalog(false); }, [adultUnlocked]);
 
+  // Only update UI when total count actually changed (avoids redundant re-renders)
   const syncFromCache = useCallback(() => {
     if (!mountedRef.current || isSearchActiveRef.current) return;
     const now = Date.now();
     if (now - lastSyncRef.current < BG_SYNC_INTERVAL) return;
     lastSyncRef.current = now;
+    const newCount = getTotalLoadedCount();
+    if (newCount === totalLoadedRef.current) return;
+    totalLoadedRef.current = newCount;
     setCategories(getAllLoadedCategories());
-    setTotalLoaded(getTotalLoadedCount());
+    setTotalLoaded(newCount);
   }, []);
 
   const startBgLoad = useCallback(() => {
@@ -146,7 +168,9 @@ export default function MoviesScreen() {
       }).then(() => {
         if (mountedRef.current) {
           setCategories(getAllLoadedCategories());
-          setTotalLoaded(getTotalLoadedCount());
+          const count = getTotalLoadedCount();
+          totalLoadedRef.current = count;
+          setTotalLoaded(count);
           setBgLoading(false);
         }
       });
@@ -154,12 +178,12 @@ export default function MoviesScreen() {
   }, [syncFromCache]);
 
   const loadCatalog = async (isRefresh: boolean) => {
-    if (!isRefresh && !catalogLoadedRef.current) hydrateFromDisk();
     const cachedCategories = getAllLoadedCategories();
     const cachedCount = getTotalLoadedCount();
     if (cachedCategories.size > 0 && !isRefresh) {
       setCategories(cachedCategories);
       setTotalLoaded(cachedCount);
+      totalLoadedRef.current = cachedCount;
       setLoading(false);
       startBgLoad();
       catalogLoadedRef.current = true;
@@ -192,7 +216,9 @@ export default function MoviesScreen() {
         });
         if (i === 0) setLoading(false);
       }
-      setTotalLoaded(getTotalLoadedCount());
+      const count = getTotalLoadedCount();
+      totalLoadedRef.current = count;
+      setTotalLoaded(count);
       catalogLoadedRef.current = true;
       startBgLoad();
     } catch (e) {
@@ -201,6 +227,8 @@ export default function MoviesScreen() {
       if (mountedRef.current) setLoading(false);
     }
   };
+
+  const showGrid = !!(debouncedQuery.trim() || activeFilter !== 'all' || activeGenre || activeSort !== 'rating');
 
   const categoryData = useMemo((): CategoryRowData[] => {
     return CATEGORIES
@@ -216,19 +244,31 @@ export default function MoviesScreen() {
       }));
   }, [categories, adultUnlocked]);
 
+  // Only compute flat array when grid mode is active (avoids work in row mode)
+  // Deduplicates by title. Uses ref cache so the O(65K) loop só roda quando
+  // o número de categorias muda — não a cada sync de 8s com mesmo tamanho.
   const allItems = useMemo(() => {
-    let total = 0;
-    categories.forEach(catItems => { total += catItems.length; });
-    const items = new Array<MediaItem>(total);
-    let idx = 0;
+    if (!showGrid) return [];
+    // Retorna cache se mesmo número de categorias (mapa referência mudou mas conteúdo igual)
+    if (categories.size === allItemsCacheRef.current.size && allItemsCacheRef.current.items.length > 0) {
+      return allItemsCacheRef.current.items;
+    }
+    const seenTitles = new Set<string>();
+    const items: MediaItem[] = [];
     categories.forEach(catItems => {
-      for (let i = 0; i < catItems.length; i++) items[idx++] = catItems[i];
+      for (const item of catItems) {
+        const title = (item.tmdb?.title || item.name).toLowerCase().trim();
+        if (seenTitles.has(title)) continue;
+        seenTitles.add(title);
+        items.push(item);
+      }
     });
+    allItemsCacheRef.current = { size: categories.size, items };
     return items;
-  }, [categories]);
+  }, [categories, showGrid]);
 
   const filteredItems = useMemo(() => {
-    if (debouncedQuery.trim()) return [];
+    if (!showGrid || debouncedQuery.trim()) return [];
     try {
       let items = allItems;
       if (activeFilter !== 'all') items = filterMedia(items, activeFilter);
@@ -237,18 +277,37 @@ export default function MoviesScreen() {
       if (items.length > MAX_GRID_RESULTS) items = items.slice(0, MAX_GRID_RESULTS);
       return items;
     } catch { return []; }
-  }, [allItems, debouncedQuery, activeFilter, activeGenre, activeSort]);
+  }, [allItems, showGrid, debouncedQuery, activeFilter, activeGenre, activeSort]);
+
+  // Available genres - only recompute when category count changes (not on item updates)
+  const availableGenres = useMemo(() => {
+    if (categories.size === 0) return [];
+    if (categories.size === genresCacheRef.current.size && genresCacheRef.current.genres.length > 0) {
+      return genresCacheRef.current.genres;
+    }
+    const genres = new Set<string>();
+    categories.forEach(items => {
+      for (const item of items) {
+        item.tmdb?.genres?.forEach(g => genres.add(g));
+      }
+    });
+    const sorted = Array.from(genres).sort();
+    genresCacheRef.current = { size: categories.size, genres: sorted };
+    return sorted;
+  }, [categories]);
 
   const gridData = debouncedQuery.trim() ? searchResults : filteredItems;
-  const showGrid = debouncedQuery.trim() || activeFilter !== 'all' || activeGenre;
 
-  const renderCategoryRow = useCallback(({ item }: { item: CategoryRowData }) => (
-    <TVMediaRow title={item.name} categoryId={item.id} items={item.items} />
-  ), []);
+  // Chunk grid data into rows for ScrollView
+  const gridRows = useMemo(() => {
+    const rows: MediaItem[][] = [];
+    for (let i = 0; i < gridData.length; i += TV.mediaColumns) {
+      rows.push(gridData.slice(i, i + TV.mediaColumns));
+    }
+    return rows;
+  }, [gridData]);
 
-  const renderGridItem = useCallback(({ item }: { item: MediaItem }) => (
-    <TVMediaCard item={item} size="small" />
-  ), []);
+  const hasActiveFilters = activeFilter !== 'all' || activeGenre || activeSort !== 'rating';
 
   if (loading) {
     return (
@@ -261,6 +320,7 @@ export default function MoviesScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title}>Ondmed</Text>
@@ -282,13 +342,14 @@ export default function MoviesScreen() {
             style={[styles.headerBtn, styles.reloadBtn]}
             focusedStyle={styles.headerBtnFocused}
             focusScale={1.15}
-            onPress={() => { stopLoading(); clearAllCaches(); setCategories(new Map()); setTotalLoaded(0); catalogLoadedRef.current = false; loadCatalog(true); }}
+            onPress={() => { stopLoading(); clearAllCaches(); setCategories(new Map()); setTotalLoaded(0); totalLoadedRef.current = 0; catalogLoadedRef.current = false; loadCatalog(true); }}
           >
             <Ionicons name="refresh" size={22} color={Colors.text} />
           </TVPressable>
         </View>
       </View>
 
+      {/* Search */}
       {showSearch && (
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={22} color={Colors.textSecondary} />
@@ -303,35 +364,125 @@ export default function MoviesScreen() {
         </View>
       )}
 
+      {/* Filter Bar */}
+      <View style={styles.filterBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterList}>
+          {/* Type filters */}
+          {TYPE_FILTERS.map(f => (
+            <TVPressable
+              key={f.key}
+              style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
+              focusedStyle={styles.filterChipFocused}
+              focusScale={1.08}
+              onPress={() => setFilter(f.key)}
+            >
+              <Text style={[styles.filterText, activeFilter === f.key && styles.filterTextActive]}>
+                {f.label}
+              </Text>
+            </TVPressable>
+          ))}
+
+          <View style={styles.filterSeparator} />
+
+          {/* Sort options */}
+          {SORT_OPTIONS.map(s => (
+            <TVPressable
+              key={s.key}
+              style={[styles.filterChip, activeSort === s.key && styles.filterChipActive]}
+              focusedStyle={styles.filterChipFocused}
+              focusScale={1.08}
+              onPress={() => setSort(s.key)}
+            >
+              <Ionicons
+                name={s.icon as any}
+                size={16}
+                color={activeSort === s.key ? Colors.text : Colors.textSecondary}
+              />
+              <Text style={[styles.filterText, activeSort === s.key && styles.filterTextActive]}>
+                {s.label}
+              </Text>
+            </TVPressable>
+          ))}
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <>
+              <View style={styles.filterSeparator} />
+              <TVPressable
+                style={[styles.filterChip, styles.clearChip]}
+                focusedStyle={styles.filterChipFocused}
+                focusScale={1.08}
+                onPress={() => clearFilters()}
+              >
+                <Ionicons name="close-circle" size={16} color={Colors.error} />
+                <Text style={[styles.filterText, { color: Colors.error }]}>Limpar</Text>
+              </TVPressable>
+            </>
+          )}
+        </ScrollView>
+      </View>
+
+      {/* Genre Bar */}
+      {availableGenres.length > 0 && (
+        <View style={styles.genreBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.genreList}
+          >
+            {availableGenres.map(genre => (
+              <TVPressable
+                key={genre}
+                style={[styles.genreChip, activeGenre === genre && styles.genreChipActive]}
+                focusedStyle={styles.genreChipFocused}
+                focusScale={1.05}
+                onPress={() => setGenre(activeGenre === genre ? null : genre)}
+              >
+                <Text style={[styles.genreText, activeGenre === genre && styles.genreTextActive]}>
+                  {genre}
+                </Text>
+              </TVPressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Content */}
       {showGrid ? (
-        <FlatList
-          key="grid"
-          data={gridData}
-          keyExtractor={(item) => item.id}
-          numColumns={TV.mediaColumns}
-          renderItem={renderGridItem}
+        <ScrollView
+          style={styles.contentScroll}
           contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={15}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-          removeClippedSubviews
-          ListHeaderComponent={
-            <Text style={styles.resultsText}>{gridData.length} resultados</Text>
-          }
-        />
+        >
+          <Text style={styles.resultsText}>{gridData.length} resultados</Text>
+          {searching && (
+            <ActivityIndicator size="small" color={Colors.primary} style={{ marginBottom: Spacing.md }} />
+          )}
+          {gridRows.map((row, rowIndex) => (
+            <View key={rowIndex} style={styles.gridRow}>
+              {row.map(item => (
+                <TVMediaCard key={item.id} item={item} size="small" />
+              ))}
+            </View>
+          ))}
+        </ScrollView>
       ) : (
+        // FlatList virtualiza as linhas: só renderiza ~5 rows visíveis ao invés de 55 de uma vez
+        // Reduz de 825 TVMediaCards renderizados simultaneamente para ~75
+        // Isso é crítico para Fire TV Lite (1GB RAM): menos memória, menos GC, menos hooks ativos
         <FlatList
-          key="rows"
+          style={styles.contentScroll}
           data={categoryData}
-          keyExtractor={(item) => item.id}
-          renderItem={renderCategoryRow}
-          showsVerticalScrollIndicator={false}
-          initialNumToRender={4}
+          keyExtractor={item => item.id}
+          renderItem={({ item: cat }) => (
+            <TVMediaRow title={cat.name} categoryId={cat.id} items={cat.items} />
+          )}
+          initialNumToRender={5}
           maxToRenderPerBatch={3}
           windowSize={5}
-          removeClippedSubviews
+          removeClippedSubviews={false}
+          showsVerticalScrollIndicator={false}
+          updateCellsBatchingPeriod={100}
         />
       )}
     </View>
@@ -342,7 +493,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: Colors.textSecondary, marginTop: Spacing.md, fontSize: Typography.body.fontSize },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.md },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.sm },
   headerLeft: { flex: 1 },
   headerRight: { flexDirection: 'row', gap: Spacing.sm },
   title: { color: Colors.text, fontSize: Typography.h1.fontSize, fontWeight: '700' },
@@ -350,9 +501,92 @@ const styles = StyleSheet.create({
   headerBtn: { padding: Spacing.sm, backgroundColor: Colors.surface, borderRadius: BorderRadius.full },
   reloadBtn: { backgroundColor: Colors.primary },
   headerBtnFocused: { backgroundColor: 'rgba(99,102,241,0.25)' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.lg, marginHorizontal: Spacing.xl, marginBottom: Spacing.md, height: 56, gap: Spacing.sm },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.lg, marginHorizontal: Spacing.xl, marginBottom: Spacing.sm, height: 56, gap: Spacing.sm },
   searchInput: { flex: 1, color: Colors.text, fontSize: Typography.body.fontSize },
-  grid: { paddingHorizontal: Spacing.xl },
-  gridRow: { gap: Spacing.md, marginBottom: Spacing.md },
+
+  // Filter bar
+  filterBar: {
+    paddingVertical: Spacing.xs,
+  },
+  filterList: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+    alignItems: 'center',
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceVariant,
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterChipFocused: {
+    backgroundColor: 'rgba(99,102,241,0.3)',
+  },
+  filterText: {
+    color: Colors.textSecondary,
+    fontSize: Typography.caption.fontSize,
+    fontWeight: '500',
+  },
+  filterTextActive: {
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  filterSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing.xs,
+  },
+  clearChip: {
+    backgroundColor: 'rgba(239,68,68,0.15)',
+  },
+
+  // Genre bar
+  genreBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  genreList: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  genreChip: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surface,
+  },
+  genreChipActive: {
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primary,
+  },
+  genreChipFocused: {
+    backgroundColor: 'rgba(99,102,241,0.2)',
+    borderColor: Colors.primaryLight,
+  },
+  genreText: {
+    color: Colors.textSecondary,
+    fontSize: Typography.caption.fontSize,
+    fontWeight: '600',
+  },
+  genreTextActive: {
+    color: Colors.text,
+    fontWeight: '700',
+  },
+
+  // Content area
+  contentScroll: { flex: 1 },
+
+  // Grid
+  grid: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xl },
+  gridRow: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.md },
   resultsText: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginBottom: Spacing.md },
 });

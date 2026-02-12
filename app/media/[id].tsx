@@ -244,23 +244,25 @@ export default function TVMediaDetailScreen() {
               keyExtractor={(item) => item.id.toString()}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: Spacing.xl }}
+              contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm }}
               renderItem={({ item: actor }) => (
-                <TVPressable
-                  style={styles.castCard}
-                  focusedStyle={styles.castCardFocused}
-                  focusScale={1.1}
-                  onPress={() => handleActorPress(actor)}
-                >
-                  <Image
-                    source={{ uri: actor.photo || '' }}
-                    style={styles.castPhoto}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
-                  <Text style={styles.castName} numberOfLines={1}>{actor.name}</Text>
-                  <Text style={styles.castCharacter} numberOfLines={1}>{actor.character}</Text>
-                </TVPressable>
+                <View style={styles.castCardWrapper}>
+                  <TVPressable
+                    style={styles.castCard}
+                    focusedStyle={styles.castCardFocused}
+                    focusScale={1.08}
+                    onPress={() => handleActorPress(actor)}
+                  >
+                    <Image
+                      source={{ uri: actor.photo || '' }}
+                      style={styles.castPhoto}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                    <Text style={styles.castName} numberOfLines={2}>{actor.name}</Text>
+                    <Text style={styles.castCharacter} numberOfLines={2}>{actor.character}</Text>
+                  </TVPressable>
+                </View>
               )}
             />
           </View>
@@ -313,11 +315,12 @@ const styles = StyleSheet.create({
   section: { marginTop: Spacing.xl },
   sectionTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700', paddingHorizontal: Spacing.xl, marginBottom: Spacing.md },
   overview: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, lineHeight: 28, paddingHorizontal: Spacing.xl },
-  castCard: { width: scale(100), marginRight: Spacing.lg, alignItems: 'center' },
-  castCardFocused: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: BorderRadius.lg, padding: 4 },
-  castPhoto: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.surface },
-  castName: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
-  castCharacter: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center' },
+  castCardWrapper: { padding: 8 },
+  castCard: { width: scale(150), alignItems: 'center', padding: Spacing.sm, borderRadius: BorderRadius.lg, backgroundColor: Colors.surface },
+  castCardFocused: { backgroundColor: 'rgba(99,102,241,0.2)' },
+  castPhoto: { width: scale(110), height: scale(110), borderRadius: scale(55), backgroundColor: Colors.surfaceVariant },
+  castName: { color: Colors.text, fontSize: Typography.body.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
+  castCharacter: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, textAlign: 'center', marginTop: 2 },
   errorText: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, marginTop: Spacing.lg },
   backBtn: { marginTop: Spacing.xl, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, backgroundColor: Colors.primary, borderRadius: BorderRadius.lg },
   backBtnText: { color: '#000', fontWeight: '600', fontSize: Typography.body.fontSize },

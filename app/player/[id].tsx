@@ -347,6 +347,12 @@ export default function TVPlayerScreen() {
                 <Ionicons name="arrow-back" size={28} color={Colors.text} />
               </TVPressable>
 
+              {channel.channelNumber && (
+                <View style={styles.channelNumberBadge}>
+                  <Text style={styles.channelNumberText}>{channel.channelNumber}</Text>
+                </View>
+              )}
+
               <View style={styles.channelInfo}>
                 <Text style={styles.channelName}>{channel.name}</Text>
                 <Text style={styles.channelCategory}>{channel.category}</Text>
@@ -581,6 +587,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg,
   },
   backButton: { padding: Spacing.md, marginRight: Spacing.md },
+  channelNumberBadge: {
+    backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: BorderRadius.sm, marginRight: Spacing.md,
+  },
+  channelNumberText: {
+    color: '#000', fontSize: Typography.h3.fontSize, fontWeight: '700', fontFamily: 'monospace',
+  },
   channelInfo: { flex: 1 },
   channelName: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '600' },
   channelCategory: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize },

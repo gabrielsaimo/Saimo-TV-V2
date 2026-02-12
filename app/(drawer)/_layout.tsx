@@ -1,17 +1,32 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Animated,
+  LayoutAnimation,
+  UIManager,
+  Platform,
 } from 'react-native';
 import { Slot, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
 import TVPressable from '../../components/TVPressable';
+import { hydrateFromDisk } from '../../services/streamingService';
+
+// Habilita LayoutAnimation no Android (necessário para animação nativa de layout)
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 const SIDEBAR_WIDTH = TV.sidebarWidth;
 const SIDEBAR_COLLAPSED = TV.sidebarCollapsedWidth;
+
+// Animação nativa de layout — roda no thread nativo, JS fica livre para D-pad
+const LAYOUT_ANIM = LayoutAnimation.create(
+  120,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity,
+);
 
 interface NavItem {
   route: string;
@@ -31,17 +46,59 @@ export default function DrawerLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(false);
-  const widthAnim = useRef(new Animated.Value(SIDEBAR_COLLAPSED)).current;
 
-  const toggleSidebar = useCallback((expand: boolean) => {
-    setExpanded(expand);
-    Animated.spring(widthAnim, {
-      toValue: expand ? SIDEBAR_WIDTH : SIDEBAR_COLLAPSED,
-      friction: 12,
-      tension: 80,
-      useNativeDriver: false,
-    }).start();
-  }, [widthAnim]);
+  // Refs para estado síncrono — evitam stale closures nos handlers
+  const expandedRef = useRef(false);
+  const focusCountRef = useRef(0);
+  // Timer de colapso com clearTimeout no focus para cancelar colapsos pendentes
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hidrata o catálogo do disco de forma assíncrona no startup
+  useEffect(() => {
+    hydrateFromDisk().catch(() => {});
+  }, []);
+
+  // ============================
+  // Sidebar focus handlers — deps VAZIAS, completamente estáveis
+  // ============================
+  // Por que NÃO usar {expanded && <Text>}:
+  //   Quando expanded muda, React monta/desmonta o <Text> dentro do TVPressable focado.
+  //   A mudança na árvore de filhos faz o focus engine do Android recalcular foco.
+  //   Isso dispara blur → sidebar colapsa → remonta → focus → expande → ciclo infinito.
+  //
+  // Solução: sempre montar o <Text>, apenas mudar style (maxWidth/opacity).
+  //   Mudança de style NÃO altera a árvore = focus engine não recalcula = sem blur espúrio.
+
+  const handleItemFocus = useCallback(() => {
+    focusCountRef.current += 1;
+    // Cancela qualquer timer de colapso pendente (cobre o caso blur-antes-de-focus)
+    if (collapseTimerRef.current !== null) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+    if (!expandedRef.current) {
+      expandedRef.current = true;
+      LayoutAnimation.configureNext(LAYOUT_ANIM);
+      setExpanded(true);
+    }
+  }, []);
+
+  const handleItemBlur = useCallback(() => {
+    focusCountRef.current = Math.max(0, focusCountRef.current - 1);
+    // Limpa timer anterior
+    if (collapseTimerRef.current !== null) {
+      clearTimeout(collapseTimerRef.current);
+    }
+    // 200ms de debounce — generoso para Fire TV Lite (JS thread pode estar ocupada)
+    collapseTimerRef.current = setTimeout(() => {
+      collapseTimerRef.current = null;
+      if (focusCountRef.current === 0 && expandedRef.current) {
+        expandedRef.current = false;
+        LayoutAnimation.configureNext(LAYOUT_ANIM);
+        setExpanded(false);
+      }
+    }, 200);
+  }, []);
 
   const isActive = (route: string) => {
     if (route === '/(drawer)') {
@@ -53,13 +110,11 @@ export default function DrawerLayout() {
   return (
     <View style={styles.container}>
       {/* Sidebar */}
-      <Animated.View style={[styles.sidebar, { width: widthAnim }]}>
+      <View style={[styles.sidebar, { width: expanded ? SIDEBAR_WIDTH : SIDEBAR_COLLAPSED }]}>
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Ionicons name="tv" size={32} color={Colors.primary} />
-          {expanded && (
-            <Text style={styles.logoText}>Saimo TV</Text>
-          )}
+          <Text style={[styles.logoText, !expanded && styles.textCollapsed]}>Saimo TV</Text>
         </View>
 
         {/* Nav Items */}
@@ -82,8 +137,8 @@ export default function DrawerLayout() {
                     router.replace(item.route as any);
                   }
                 }}
-                onFocus={() => toggleSidebar(true)}
-                onBlur={() => toggleSidebar(false)}
+                onFocus={handleItemFocus}
+                onBlur={handleItemBlur}
                 hasTVPreferredFocus={index === 0}
               >
                 <Ionicons
@@ -91,17 +146,16 @@ export default function DrawerLayout() {
                   size={28}
                   color={active ? Colors.primary : Colors.textSecondary}
                 />
-                {expanded && (
-                  <Text
-                    style={[
-                      styles.navLabel,
-                      active && styles.navLabelActive,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.label}
-                  </Text>
-                )}
+                <Text
+                  style={[
+                    styles.navLabel,
+                    active && styles.navLabelActive,
+                    !expanded && styles.textCollapsed,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </Text>
                 {active && <View style={styles.activeIndicator} />}
               </TVPressable>
             );
@@ -110,11 +164,9 @@ export default function DrawerLayout() {
 
         {/* Version */}
         <View style={styles.versionContainer}>
-          {expanded && (
-            <Text style={styles.versionText}>v1.0.0</Text>
-          )}
+          <Text style={[styles.versionText, !expanded && styles.textCollapsed]}>v1.0.0</Text>
         </View>
-      </Animated.View>
+      </View>
 
       {/* Main Content */}
       <View style={styles.content}>
@@ -181,6 +233,15 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: Colors.primary,
     fontWeight: '600',
+  },
+  // Style hiding: componente sempre montado, sem mudança na árvore DOM
+  // maxWidth: 0 → não ocupa espaço horizontal (ícone fica centralizado)
+  // opacity: 0 → invisível
+  // overflow: 'hidden' → nenhum pixel vaza
+  textCollapsed: {
+    maxWidth: 0,
+    opacity: 0,
+    overflow: 'hidden',
   },
   activeIndicator: {
     position: 'absolute',

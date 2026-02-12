@@ -158,8 +158,7 @@ export default function TVCategoryScreen() {
         )}
         initialNumToRender={15}
         maxToRenderPerBatch={15}
-        windowSize={5}
-        removeClippedSubviews
+        windowSize={7}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={renderFooter}

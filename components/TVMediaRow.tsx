@@ -9,7 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import type { MediaItem } from '../types';
-import { Colors, Spacing, Typography } from '../constants/Colors';
+import { Colors, Spacing, Typography, TV } from '../constants/Colors';
+
+// Largura fixa por item: card + padding SCALE_PADDING (10px cada lado) = card + 20
+// getItemLayout permite que o FlatList calcule posições sem medir cada item
+const CARD_ITEM_WIDTH = TV.mediaCardLargeWidth + 20; // medium size + SCALE_PADDING * 2
+const LIST_PADDING = Spacing.xl; // paddingHorizontal do contentContainerStyle
 import TVPressable from './TVPressable';
 import TVMediaCard from './TVMediaCard';
 
@@ -45,10 +50,17 @@ const TVMediaRow = memo(({ title, categoryId, items }: TVMediaRowProps) => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => <TVMediaCard item={item} size="medium" />}
-        initialNumToRender={6}
-        maxToRenderPerBatch={5}
+        initialNumToRender={5}
+        maxToRenderPerBatch={4}
         windowSize={3}
-        removeClippedSubviews
+        removeClippedSubviews={false}
+        // getItemLayout elimina medição de cada card — crítico com 15 cards por linha
+        // O FlatList sabe a posição de cada item sem precisar renderizar todos primeiro
+        getItemLayout={(_, index) => ({
+          length: CARD_ITEM_WIDTH,
+          offset: LIST_PADDING + CARD_ITEM_WIDTH * index,
+          index,
+        })}
       />
     </View>
   );

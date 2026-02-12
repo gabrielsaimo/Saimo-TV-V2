@@ -37,8 +37,19 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
     isMountedRef.current = true;
     if (showEPG) setCurrentEPG(getCurrentProgram(channel.id));
     const unsubscribe = onEPGUpdate((updatedId) => {
-      if (isMountedRef.current && updatedId === channel.id && showEPG)
+      if (!isMountedRef.current || !showEPG) return;
+      if (updatedId === channel.id) {
+        // Atualização direta (fetch individual) — imediata
         setCurrentEPG(getCurrentProgram(channel.id));
+      } else if (updatedId === '*') {
+        // Atualização em lote (carregamento do disco) — escalonada para evitar
+        // 20+ cards chamando setCurrentEPG simultaneamente (congela a UI)
+        // Distribui as atualizações ao longo de 300ms com delay aleatório
+        const delay = Math.floor(Math.random() * 300);
+        setTimeout(() => {
+          if (isMountedRef.current) setCurrentEPG(getCurrentProgram(channel.id));
+        }, delay);
+      }
     });
     return () => { isMountedRef.current = false; unsubscribe(); };
   }, [channel.id, showEPG]);
@@ -112,7 +123,7 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
 
 TVChannelCard.displayName = 'TVChannelCard';
 
-const SCALE_PADDING = 6;
+const SCALE_PADDING = 10;
 
 const styles = StyleSheet.create({
   cardWrapper: {
