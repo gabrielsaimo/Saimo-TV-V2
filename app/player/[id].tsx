@@ -73,21 +73,28 @@ export default function TVPlayerScreen() {
     setShowGuide(false);
     setShowMenu(false);
     setFavorite(isFavorite(target.id));
-    router.replace({
-      pathname: '/player/[id]',
-      params: { id: target.id },
-    });
+    // Use setParams for smoother transition on same screen
+    router.setParams({ id: target.id });
   }, [channel?.id, router, isFavorite]);
 
   const switchChannelByOffset = useCallback((offset: number) => {
-    if (currentIndex < 0) return;
-    const nextIndex = (currentIndex + offset + allChannelsList.length) % allChannelsList.length;
+    let idx = currentIndex;
+    // Fallback if index not found
+    if (idx < 0) {
+      console.warn('Current channel index not found, defaulting to 0');
+      idx = 0;
+    }
+    
+    const nextIndex = (idx + offset + allChannelsList.length) % allChannelsList.length;
     const nextChannel = allChannelsList[nextIndex];
+    
+    console.log(`Switching channel: ${channel?.name} (${idx}) -> ${nextChannel?.name} (${nextIndex})`);
+
     if (nextChannel) {
       setOsdChannel(nextChannel);
       switchToChannel(nextChannel);
     }
-  }, [currentIndex, switchToChannel]);
+  }, [currentIndex, switchToChannel, channel, allChannelsList]);
 
   // OSD auto-hide
   useEffect(() => {
@@ -163,15 +170,37 @@ export default function TVPlayerScreen() {
   // D-pad / Remote key handler
   const { setMode } = useTVKeyHandler(
     (event) => {
-      // When guide or menu is open, only intercept menu key to close
-      if (showGuide || showMenu) {
-        if (event.eventType === 'menu') {
-          if (showMenu) setShowMenu(false);
-          else if (showGuide) setShowGuide(false);
+      // Only trigger on Key Up (release) to prevent double-firing (since we listen to both down/up now)
+      if (event.action === 'down') return;
+
+      // Priority 1: Menu Key - Always toggle menu
+      if (event.eventType === 'menu') {
+        if (showMenu) setShowMenu(false);
+        else if (showGuide) setShowGuide(false);
+        else {
+          setShowMenu(true);
+          setShowControls(false);
         }
+        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
         return;
       }
 
+      // Priority 2: If Side Menu or Guide is open, let them handle nav (Passthrough)
+      if (showGuide || showMenu) return;
+
+      // Priority 3: If Controls are visible, let Native Focus handle navigation (Passthrough)
+      // This allows the user to D-pad to the "Favorite" button and press Select.
+      if (showControls) {
+          // Still handle 'Back' or special shortcuts if needed, but ignore Up/Down for channel switching
+          if (event.eventType === 'select') {
+             // Let default 'dpad center' happen natively on the focused button?
+             // Or if we need to force it... 
+             // Usually native focus + select work automatically if we don't interfere.
+          }
+          return; 
+      }
+
+      // Priority 4: Video Playing State (No UI) -> Custom Actions
       switch (event.eventType) {
         case 'up':
         case 'channelUp':
@@ -185,23 +214,27 @@ export default function TVPlayerScreen() {
         case 'playPause':
           handleScreenPress();
           break;
-        case 'menu':
-          setShowMenu(true);
-          setShowControls(false);
-          if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-          break;
       }
     },
   );
 
   // Switch key interception mode when overlays open/close
   useEffect(() => {
+    // If Guide or Menu is open, we need PassThrough for list navigation
     if (showGuide || showMenu) {
       setMode('passthrough');
-    } else {
-      setMode('intercept');
+      return;
     }
-  }, [showGuide, showMenu, setMode]);
+
+    // If controls are visible, we need PassThrough to navigate to buttons (like Favorite)
+    if (showControls) {
+      setMode('passthrough');
+      return;
+    }
+
+    // Otherwise (Video playing full screen), Intercept for Channel Switching
+    setMode('intercept');
+  }, [showGuide, showMenu, showControls, setMode]);
 
   // Back Handler (remote back button)
   useEffect(() => {
@@ -259,10 +292,7 @@ export default function TVPlayerScreen() {
   const handleSwitchChannel = useCallback((target: Channel) => {
     setShowGuide(false);
     setFavorite(isFavorite(target.id));
-    router.replace({
-      pathname: '/player/[id]',
-      params: { id: target.id },
-    });
+    router.setParams({ id: target.id });
   }, [router, isFavorite]);
 
   // Scroll to current channel in guide
@@ -293,13 +323,20 @@ export default function TVPlayerScreen() {
     <View style={styles.container}>
       <StatusBar hidden />
 
-      <Pressable style={styles.videoContainer} onPress={handleScreenPress}>
+      <Pressable 
+        style={styles.videoContainer} 
+        onPress={handleScreenPress}
+        focusable={!showControls} // Allow taking focus when controls are hidden
+        hasTVPreferredFocus={!showControls} // Request focus when controls hide
+        android_ripple={{ color: 'transparent' }}
+      >
         <VideoView
           ref={videoViewRef}
           player={player}
           style={styles.video}
           contentFit="contain"
           nativeControls={false}
+          focusable={false} // Prevent video view from taking focus
         />
 
         {/* Error State */}
@@ -348,7 +385,16 @@ export default function TVPlayerScreen() {
               </TVPressable>
 
               <View style={styles.channelInfo}>
-                <Text style={styles.channelName}>{channel.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {channel.channelNumber && (
+                    <Text style={[styles.channelName, { color: Colors.primary, marginRight: 8 }]}>
+                      {String(channel.channelNumber).padStart(2, '0')}
+                    </Text>
+                  )}
+                  <Text style={styles.channelName} numberOfLines={1}>
+                    {channel.name}
+                  </Text>
+                </View>
                 <Text style={styles.channelCategory}>{channel.category}</Text>
               </View>
 
@@ -365,6 +411,7 @@ export default function TVPlayerScreen() {
                 ]}
                 focusScale={1.15}
                 onPress={handleToggleGuide}
+                hasTVPreferredFocus={showControls && !showMenu && !showGuide} // Autofocus this when controls appear
               >
                 <Ionicons name="list" size={28} color={Colors.text} />
               </TVPressable>

@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { Colors, BorderRadius } from '../constants/Colors';
 
+// ... imports
+
 interface TVPressableProps extends Omit<PressableProps, 'style' | 'children'> {
   /** Style for the visible container (border, background, padding, etc.) */
   style?: StyleProp<ViewStyle>;
@@ -20,7 +22,7 @@ interface TVPressableProps extends Omit<PressableProps, 'style' | 'children'> {
   focusScale?: number;
   /** Border color when focused. Default: '#6366F1' (primary) */
   focusBorderColor?: string;
-  children: ReactNode;
+  children: ReactNode | ((state: { focused: boolean }) => ReactNode);
 }
 
 /**
@@ -64,6 +66,8 @@ export default function TVPressable({
     onBlur?.(e);
   }, [scaleAnim, onBlur]);
 
+  const childrenNode = typeof children === 'function' ? children({ focused: isFocused }) : children;
+
   return (
     <Pressable
       {...pressableProps}
@@ -78,11 +82,12 @@ export default function TVPressable({
           isFocused && {
             borderColor: focusBorderColor,
             elevation: 16,
+            zIndex: 999, // Ensure focused item is above others
           },
           isFocused && focusedStyle,
         ]}
       >
-        {children}
+        {childrenNode}
       </Animated.View>
     </Pressable>
   );

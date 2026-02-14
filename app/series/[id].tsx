@@ -242,7 +242,7 @@ export default function TVSeriesDetailScreen() {
               keyExtractor={(item) => item.id.toString()}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: Spacing.xl }}
+              contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm }}
               renderItem={({ item: actor }) => (
                 <TVPressable
                   style={styles.castCard}
@@ -397,9 +397,9 @@ const styles = StyleSheet.create({
   episodeInfo: { flex: 1 },
   episodeName: { color: Colors.text, fontSize: Typography.body.fontSize, fontWeight: '500' },
   episodeContinue: { color: Colors.primary, fontSize: Typography.caption.fontSize, marginTop: 4 },
-  castCard: { width: scale(100), marginRight: Spacing.lg, alignItems: 'center' },
+  castCard: { width: scale(120), marginRight: Spacing.lg, alignItems: 'center' },
   castCardFocused: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: BorderRadius.lg, padding: 4 },
-  castPhoto: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.surface },
+  castPhoto: { width: scale(100), height: scale(100), borderRadius: scale(50), backgroundColor: Colors.surface },
   castName: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
   castCharacter: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center' },
   errorText: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, marginTop: Spacing.lg },

@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors, Typography, Spacing, BorderRadius, TV, scale } from '../../constants/Colors';
 import TVPressable from '../../components/TVPressable';
-import { loadInitialCategories, getMediaByActor } from '../../services/mediaService';
+import { loadInitialCategories, getMediaByActor, deduplicateMedia } from '../../services/mediaService';
 import type { MediaItem, CastMember } from '../../types';
 import TVMediaCard from '../../components/TVMediaCard';
 
@@ -32,7 +32,8 @@ export default function TVActorScreen() {
       const categories = await loadInitialCategories();
       const allItems: MediaItem[] = [];
       categories.forEach(items => allItems.push(...items));
-      const actorMedia = getMediaByActor(actorId, allItems);
+      const uniqueItems = deduplicateMedia(allItems);
+      const actorMedia = getMediaByActor(actorId, uniqueItems);
       setFilmography(actorMedia);
       for (const item of actorMedia) {
         const castMember = item.tmdb?.cast?.find(c => c.id === actorId);

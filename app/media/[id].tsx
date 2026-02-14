@@ -115,12 +115,7 @@ export default function TVMediaDetailScreen() {
             contentFit="cover"
             cachePolicy="memory-disk"
           />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)', Colors.background]}
-            style={styles.heroGradient}
-          />
-
-          {/* Back */}
+           {/* Back */}
           <TVPressable
             style={styles.headerButton}
             focusScale={1.15}
@@ -128,6 +123,12 @@ export default function TVMediaDetailScreen() {
           >
             <Ionicons name="arrow-back" size={28} color={Colors.text} />
           </TVPressable>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.4)', Colors.background]}
+            style={styles.heroGradient}
+          />
+
+         
 
           {/* Content over hero */}
           <View style={styles.heroContent}>
@@ -244,7 +245,7 @@ export default function TVMediaDetailScreen() {
               keyExtractor={(item) => item.id.toString()}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: Spacing.xl }}
+              contentContainerStyle={{ paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm }}
               renderItem={({ item: actor }) => (
                 <TVPressable
                   style={styles.castCard}
@@ -282,6 +283,7 @@ const styles = StyleSheet.create({
   headerButton: {
     position: 'absolute', top: Spacing.lg, left: Spacing.xl,
     backgroundColor: 'rgba(0,0,0,0.5)', padding: Spacing.md, borderRadius: BorderRadius.full, zIndex: 10,
+    alignItems: 'center', justifyContent: 'center', width: 50, height: 50
   },
   heroContent: {
     position: 'absolute', bottom: 0, left: Spacing.xl, right: Spacing.xl,
@@ -313,9 +315,9 @@ const styles = StyleSheet.create({
   section: { marginTop: Spacing.xl },
   sectionTitle: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700', paddingHorizontal: Spacing.xl, marginBottom: Spacing.md },
   overview: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, lineHeight: 28, paddingHorizontal: Spacing.xl },
-  castCard: { width: scale(100), marginRight: Spacing.lg, alignItems: 'center' },
+  castCard: { width: scale(120), marginRight: Spacing.lg, alignItems: 'center' },
   castCardFocused: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: BorderRadius.lg, padding: 4 },
-  castPhoto: { width: scale(80), height: scale(80), borderRadius: scale(40), backgroundColor: Colors.surface },
+  castPhoto: { width: scale(100), height: scale(100), borderRadius: scale(50), backgroundColor: Colors.surface },
   castName: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', textAlign: 'center', marginTop: Spacing.sm },
   castCharacter: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center' },
   errorText: { color: Colors.textSecondary, fontSize: Typography.body.fontSize, marginTop: Spacing.lg },

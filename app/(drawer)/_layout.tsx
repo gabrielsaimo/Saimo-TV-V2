@@ -11,7 +11,7 @@ import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/C
 import TVPressable from '../../components/TVPressable';
 
 const SIDEBAR_WIDTH = TV.sidebarWidth;
-const SIDEBAR_COLLAPSED = TV.sidebarCollapsedWidth;
+const SIDEBAR_COLLAPSED = TV.sidebarCollapsedWidth + 20; // Increased for better icon visual
 
 interface NavItem {
   route: string;
@@ -66,12 +66,18 @@ export default function DrawerLayout() {
         <View style={styles.navItems}>
           {NAV_ITEMS.map((item, index) => {
             const active = isActive(item.route);
+            // We need to track focus locally to change icon/text color to white when focused
+            // But since there are few items, we can't easily do it inside the map without extracting a component
+            // For now, let's rely on the background style change.
+            // Fix alignment: if collapsed, center the icon.
+            
             return (
               <TVPressable
                 key={item.route}
                 style={[
                   styles.navItem,
                   active && styles.navItemActive,
+                  !expanded && { justifyContent: 'center', paddingHorizontal: 0 } // Center when collapsed
                 ]}
                 focusedStyle={styles.navItemFocused}
                 focusScale={1.05}
@@ -86,23 +92,27 @@ export default function DrawerLayout() {
                 onBlur={() => toggleSidebar(false)}
                 hasTVPreferredFocus={index === 0}
               >
-                <Ionicons
-                  name={(active ? item.iconFocused : item.icon) as any}
-                  size={28}
-                  color={active ? Colors.primary : Colors.textSecondary}
-                />
-                {expanded && (
-                  <Text
-                    style={[
-                      styles.navLabel,
-                      active && styles.navLabelActive,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.label}
-                  </Text>
+                {({ focused }: { focused: boolean }) => (
+                  <>
+                    <Ionicons
+                      name={(active ? item.iconFocused : item.icon) as any}
+                      size={28}
+                      color={focused ? '#FFF' : (active ? Colors.primary : Colors.textSecondary)}
+                    />
+                    {expanded && (
+                      <Text
+                        style={[
+                          styles.navLabel,
+                          active && styles.navLabelActive,
+                          focused && { color: '#FFF' }
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.label}
+                      </Text>
+                    )}
+                  </>
                 )}
-                {active && <View style={styles.activeIndicator} />}
               </TVPressable>
             );
           })}
@@ -137,15 +147,17 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
     justifyContent: 'space-between',
     overflow: 'hidden',
+    zIndex: 100, // Ensure sidebar is above content for focus scaling
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'center', // Center logo in both states
     paddingHorizontal: Spacing.xs,
     paddingVertical: Spacing.md,
     gap: Spacing.sm,
     marginBottom: Spacing.xl,
+    height: 60, // Fixed height for consistency
   },
   logoText: {
     color: Colors.text,
@@ -154,24 +166,26 @@ const styles = StyleSheet.create({
   },
   navItems: {
     flex: 1,
-    gap: Spacing.xs,
+    gap: Spacing.sm, // Increase gap slightly
+    paddingHorizontal: Spacing.xs, // Add padding for pill shape
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // Align left but content will be centered if collapsed via padding
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: Spacing.md,
     gap: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginHorizontal: 0,
+    borderRadius: BorderRadius.lg, // More rounded
+    marginHorizontal: 4,
     minHeight: 56,
   },
   navItemActive: {
     backgroundColor: 'rgba(99, 102, 241, 0.15)',
   },
   navItemFocused: {
-    backgroundColor: 'rgba(99, 102, 241, 0.35)',
+    backgroundColor: Colors.primary, // Solid primary when focused
+    transform: [{ scale: 1.05 }],
   },
   navLabel: {
     color: Colors.textSecondary,
@@ -183,13 +197,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   activeIndicator: {
-    position: 'absolute',
-    left: 0,
-    top: '20%',
-    bottom: '20%',
-    width: 4,
-    backgroundColor: Colors.primary,
-    borderRadius: 2,
+    // Removed specific indicator, using background color instead
+    display: 'none', 
   },
   content: {
     flex: 1,

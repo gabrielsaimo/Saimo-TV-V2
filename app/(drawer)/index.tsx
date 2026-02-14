@@ -15,7 +15,7 @@ import TVPressable from '../../components/TVPressable';
 import { useChannelStore } from '../../stores/channelStore';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { initEPGService, prefetchEPG, hasEPGMapping } from '../../services/epgService';
+import { initEPGService, prefetchEPG, loadEPGsWithProgress, hasEPGMapping } from '../../services/epgService';
 import type { Channel } from '../../types';
 import TVChannelCard from '../../components/TVChannelCard';
 
@@ -34,7 +34,9 @@ export default function HomeScreen() {
   } = useChannelStore();
 
   const { favorites } = useFavoritesStore();
-  const { adultUnlocked } = useSettingsStore();
+  const { adultUnlocked, showEPG } = useSettingsStore();
+  const [epgLoading, setEpgLoading] = useState(true);
+  const [epgProgress, setEpgProgress] = useState<{ current: number; total: number } | null>(null);
 
   useEffect(() => {
     initEPGService();
@@ -52,36 +54,69 @@ export default function HomeScreen() {
     );
   }, [allChannels, searchQuery]);
 
-  // Prefetch EPG - non-blocking, never blocks UI
+  // Bulk Prefetch EPG - Load ALL visible channels before showing
   useEffect(() => {
-    if (channels.length > 0 && !prefetchedRef.current) {
-      prefetchedRef.current = true;
-      const channelIds = channels.filter(c => hasEPGMapping(c.id)).map(c => c.id);
-      if (channelIds.length === 0) return;
-
-      let cancelled = false;
-      // Use setTimeout chain instead of await loop to never block JS thread
-      let batchIndex = 0;
-      const loadNextBatch = () => {
-        if (cancelled || batchIndex >= channelIds.length) return;
-        const batch = channelIds.slice(batchIndex, batchIndex + 2);
-        batchIndex += 2;
-        // Fire and forget - don't await
-        prefetchEPG(batch).catch(() => {});
-        // Schedule next batch with generous delay to keep UI responsive
-        setTimeout(loadNextBatch, 500);
-      };
-      // Start after interactions settle
-      const task = InteractionManager.runAfterInteractions(() => {
-        if (!cancelled) setTimeout(loadNextBatch, 1000);
-      });
-
-      return () => {
-        cancelled = true;
-        task.cancel();
-      };
+    // If EPG is disabled, we are "ready" immediately
+    if (!showEPG) {
+      setEpgLoading(false);
+      return;
     }
-  }, [channels]);
+
+    // Reset status when channels list changes (filtering/searching)
+    setEpgLoading(true);
+    prefetchedRef.current = false; // Reset ref just in case
+
+    if (channels.length > 0) {
+      const channelIds = channels.filter(c => hasEPGMapping(c.id)).map(c => c.id);
+      
+      if (channelIds.length === 0) {
+        setEpgLoading(false);
+        return;
+      }
+
+      console.log(`[BulkEPG] Loading for ${channelIds.length} channels...`);
+      setEpgProgress({ current: 0, total: channelIds.length });
+      
+      const startTime = Date.now();
+      const MIN_LOADING_TIME = 1000; // Force at least 1 second loading
+
+      // Load with progress
+      // We import check to see if loadEPGsWithProgress is available (it is now)
+      loadEPGsWithProgress(channelIds, (current, total) => {
+        if (mountedRef.current) {
+          setEpgProgress({ current, total });
+        }
+      }).then(async () => {
+        if (!mountedRef.current) return;
+        
+        const elapsed = Date.now() - startTime;
+        if (elapsed < MIN_LOADING_TIME) {
+          await new Promise(r => setTimeout(r, MIN_LOADING_TIME - elapsed));
+        }
+
+        if (mountedRef.current) {
+           console.log('[BulkEPG] Done!');
+           setEpgLoading(false);
+           setEpgProgress(null);
+        }
+      }).catch(err => {
+         console.warn('[BulkEPG] Error:', err);
+         if (mountedRef.current) {
+            setEpgLoading(false);
+            setEpgProgress(null);
+         }
+      });
+    } else {
+      setEpgLoading(false);
+    }
+  }, [channels, showEPG]);
+
+  // Use a ref to track mounted state
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const handleSelectCategory = useCallback((category: string, index: number) => {
     setCategory(category as any);
@@ -91,8 +126,8 @@ export default function HomeScreen() {
   }, [setCategory]);
 
   const renderChannel = useCallback(({ item }: { item: Channel }) => (
-    <TVChannelCard channel={item} />
-  ), []);
+    <TVChannelCard channel={item} epgReady={!epgLoading} />
+  ), [epgLoading]);
 
   const keyExtractor = useCallback((item: Channel) => item.id, []);
 
@@ -106,7 +141,28 @@ export default function HomeScreen() {
 
       {/* Category Bar */}
       <View style={styles.categoryBar}>
-        <FlatList
+          
+          {/* EPG Loading Indicator - Top Right */}
+          {epgProgress && (
+            <View style={{
+              position: 'absolute',
+              top: 20,
+              right: 20,
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 8,
+              zIndex: 9999,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.1)'
+            }}>
+              <Text style={{ color: '#fff', fontSize: 14, userSelect: 'none', fontWeight: 'bold' }}>
+                EPG: {epgProgress.current}/{epgProgress.total}
+              </Text>
+            </View>
+          )}
+
+          <FlatList
           data={categories}
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -180,6 +236,7 @@ const styles = StyleSheet.create({
   },
   categoryList: {
     paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md, // Added to prevent clipping on focus scale
     gap: Spacing.sm,
   },
   categoryChip: {

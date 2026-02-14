@@ -35,7 +35,7 @@ const initialState = {
     autoplay: true,
     volume: 1,
     showChannelNumber: true,
-    showEPG: true,
+    showEPG: false,
 };
 
 export const useSettingsStore = create<SettingsStore>()(

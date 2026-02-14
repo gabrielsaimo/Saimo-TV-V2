@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
 import TVPressable from '../../components/TVPressable';
 import { useMediaStore } from '../../stores/mediaStore';
-import { filterMedia, sortMedia, getAllGenres } from '../../services/mediaService';
+import { filterMedia, sortMedia, getAllGenres, deduplicateMedia } from '../../services/mediaService';
 import {
   CATEGORIES,
   fetchCategoryPage,
@@ -93,7 +93,8 @@ export default function MoviesScreen() {
         let results = searchInLoadedData(debouncedQuery);
         if (activeFilter !== 'all') results = filterMedia(results, activeFilter);
         if (activeGenre) results = filterMedia(results, undefined, activeGenre);
-        results = sortMedia(results, activeSort);
+        if (activeSort) results = sortMedia(results, activeSort);
+        results = deduplicateMedia(results); // Deduplicate search results
         if (results.length > MAX_GRID_RESULTS) results = results.slice(0, MAX_GRID_RESULTS);
         if (mountedRef.current) {
           setSearchResults(results);
@@ -126,7 +127,11 @@ export default function MoviesScreen() {
     }, SEARCH_DEBOUNCE);
   }, []);
 
-  useEffect(() => { loadCatalog(false); }, [adultUnlocked]);
+  useEffect(() => { 
+    InteractionManager.runAfterInteractions(() => {
+      if (mountedRef.current) loadCatalog(false);
+    });
+  }, [adultUnlocked]);
 
   const syncFromCache = useCallback(() => {
     if (!mountedRef.current || isSearchActiveRef.current) return;
@@ -224,7 +229,7 @@ export default function MoviesScreen() {
     categories.forEach(catItems => {
       for (let i = 0; i < catItems.length; i++) items[idx++] = catItems[i];
     });
-    return items;
+    return deduplicateMedia(items);
   }, [categories]);
 
   const filteredItems = useMemo(() => {

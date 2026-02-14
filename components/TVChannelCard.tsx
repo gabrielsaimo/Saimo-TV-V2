@@ -15,13 +15,14 @@ import type { Channel, CurrentProgram } from '../types';
 import { Colors, BorderRadius, Spacing, Typography, TV } from '../constants/Colors';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { getCurrentProgram, onEPGUpdate } from '../services/epgService';
+import { getCurrentProgram, onEPGUpdate, hasEPGMapping } from '../services/epgService';
 
 interface TVChannelCardProps {
   channel: Channel;
+  epgReady?: boolean;
 }
 
-const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
+const TVChannelCard = memo(({ channel, epgReady = true }: TVChannelCardProps) => {
   const router = useRouter();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const showEPG = useSettingsStore(state => state.showEPG);
@@ -33,15 +34,17 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const isMountedRef = useRef(true);
 
+  const hasMapping = hasEPGMapping(channel.id);
+
   useEffect(() => {
     isMountedRef.current = true;
-    if (showEPG) setCurrentEPG(getCurrentProgram(channel.id));
+    if (showEPG && hasMapping) setCurrentEPG(getCurrentProgram(channel.id));
     const unsubscribe = onEPGUpdate((updatedId) => {
       if (isMountedRef.current && updatedId === channel.id && showEPG)
         setCurrentEPG(getCurrentProgram(channel.id));
     });
     return () => { isMountedRef.current = false; unsubscribe(); };
-  }, [channel.id, showEPG]);
+  }, [channel.id, showEPG, hasMapping]);
 
   useEffect(() => { setFavorite(isFavorite(channel.id)); }, [isFavorite, channel.id]);
 
@@ -91,16 +94,26 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
         <View style={styles.info}>
           <Text style={styles.channelName} numberOfLines={1}>{channel.name}</Text>
           <Text style={styles.category} numberOfLines={1}>{channel.category}</Text>
-          {showEPG && currentEPG?.current && (
+          {showEPG && (
             <View style={styles.epgContainer}>
-              <View style={styles.liveRow}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveText}>AO VIVO</Text>
-              </View>
-              <Text style={styles.programTitle} numberOfLines={1}>{currentEPG.current.title}</Text>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${currentEPG.progress}%` }]} />
-              </View>
+              {!epgReady ? (
+                <Text style={styles.loadingText}>Carregando guia...</Text>
+              ) : currentEPG?.current ? (
+                <>
+                  <View style={styles.liveRow}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveText}>AO VIVO</Text>
+                  </View>
+                  <Text style={styles.programTitle} numberOfLines={1}>{currentEPG.current.title}</Text>
+                  <View style={styles.progressBar}>
+                    <View style={[styles.progressFill, { width: `${currentEPG.progress}%` }]} />
+                  </View>
+                </>
+              ) : hasMapping ? (
+                 <Text style={styles.loadingText}>Carregando...</Text>
+              ) : (
+                 <Text style={styles.loadingText}>Sem informações</Text>
+              )}
             </View>
           )}
         </View>
@@ -157,6 +170,7 @@ const styles = StyleSheet.create({
   programTitle: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginBottom: 6 },
   progressBar: { height: 4, backgroundColor: Colors.progressBg, borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: Colors.progressFill },
+  loadingText: { color: Colors.textSecondary, fontSize: 11, fontStyle: 'italic' },
 });
 
 export default TVChannelCard;

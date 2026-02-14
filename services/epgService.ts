@@ -9,7 +9,7 @@ import { getEPGUrl, usesGuiaDeTV } from '../data/epgMappings';
 
 const FETCH_TIMEOUT = 15000;
 const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
-const EPG_CACHE_DIR = `${FileSystem.cacheDirectory}epg/`;
+const EPG_CACHE_DIR = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}epg_cache/`;
 
 // Proxies CORS com fallback automático
 const CORS_PROXIES = [
@@ -95,7 +95,7 @@ async function loadAllFromDisk(): Promise<void> {
 
                 // Skip expired cache
                 if ((now - entry.fetchTime) >= CACHE_DURATION_MS) {
-                    FileSystem.deleteAsync(`${EPG_CACHE_DIR}${file}`, { idempotent: true }).catch(() => {});
+                    FileSystem.deleteAsync(`${EPG_CACHE_DIR}${file}`, { idempotent: true }).catch(() => { });
                     continue;
                 }
 
@@ -350,7 +350,7 @@ export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
             lastFetch.set(channelId, ft);
 
             // Salva em disco (fire-and-forget, não bloqueia)
-            saveToDisk(channelId, filteredPrograms, ft).catch(() => {});
+            saveToDisk(channelId, filteredPrograms, ft).catch(() => { });
 
             listeners.forEach(listener => listener(channelId, filteredPrograms));
         }
@@ -437,4 +437,37 @@ export async function prefetchEPG(channelIds: string[]): Promise<void> {
 // Verifica se canal tem mapeamento EPG (sem fetch)
 export function hasEPGMapping(channelId: string): boolean {
     return getEPGUrl(channelId) !== null;
+}
+
+/**
+ * Loads EPGs with concurrency limit and progress tracking to avoid UI freeze.
+ */
+export async function loadEPGsWithProgress(
+    channelIds: string[],
+    onProgress: (current: number, total: number) => void
+): Promise<void> {
+    const total = channelIds.length;
+    let completed = 0;
+    const CONCURRENCY_LIMIT = 3; // Low concurrency to keep UI smooth
+
+    // Helper to process a single item
+    const processItem = async (id: string) => {
+        try {
+            await fetchChannelEPG(id);
+        } catch (e) {
+            // Ignore errors, just count as done
+        } finally {
+            completed++;
+            onProgress(completed, total);
+        }
+    };
+
+    // Process chunk by chunk
+    for (let i = 0; i < total; i += CONCURRENCY_LIMIT) {
+        const chunk = channelIds.slice(i, i + CONCURRENCY_LIMIT);
+        await Promise.all(chunk.map(id => processItem(id)));
+
+        // Small delay to yield to UI thread
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
 }

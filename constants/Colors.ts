@@ -168,9 +168,12 @@ const CARD_GAP = Spacing.lg; // gap between cards
 const CHANNEL_CARD_W = scale(300);
 const channelCols = Math.max(2, Math.floor((CONTENT_WIDTH - Spacing.xl * 2) / (CHANNEL_CARD_W + CARD_GAP)));
 
-// Calculate how many columns fit for media cards (~220px each at 1920)
-const MEDIA_CARD_W = scale(220);
-const mediaCols = Math.max(2, Math.floor((CONTENT_WIDTH - Spacing.xl * 2) / (MEDIA_CARD_W + Spacing.md)));
+// Calculate how many columns fit for media cards (~196px each at 1920)
+// Reduced from 220 to 196 to fit one more column (User request)
+const MEDIA_CARD_W = scale(196);
+// Card has 20px padding on each side (40px total) due to SCALE_PADDING in TVMediaCard
+const MEDIA_CARD_TOTAL_W = MEDIA_CARD_W + 40;
+const mediaCols = Math.max(2, Math.floor((CONTENT_WIDTH - Spacing.xl * 2) / (MEDIA_CARD_TOTAL_W + Spacing.md)));
 
 export const TV = {
   // Sidebar width

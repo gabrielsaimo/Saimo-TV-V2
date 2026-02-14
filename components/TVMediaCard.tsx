@@ -26,11 +26,24 @@ const SIZES = {
   large: { width: TV.mediaCardLargeWidth + scale(40), height: TV.mediaCardLargeHeight + scale(60) },
 };
 
+// Cor da classificação indicativa
+const getCertificationColor = (cert?: string) => {
+  if (!cert) return Colors.textSecondary;
+  const c = cert.toUpperCase();
+  if (c === 'L' || c === 'LIVRE') return '#10B981'; // Verde
+  if (c === '10') return '#3B82F6'; // Azul
+  if (c === '12') return '#F59E0B'; // Amarelo
+  if (c === '14') return '#F97316'; // Laranja
+  if (c === '16' || c === '18') return '#EF4444'; // Vermelho
+  return Colors.textSecondary;
+};
+
+// Cor da nota
 const getRatingColor = (rating?: number) => {
   if (!rating) return Colors.textSecondary;
-  if (rating >= 7) return '#FFD700';
-  if (rating >= 5) return '#F59E0B';
-  return '#EF4444';
+  if (rating >= 7) return '#FFD700'; // Dourado
+  if (rating >= 5) return '#F59E0B'; // Amarelo
+  return '#EF4444'; // Vermelho
 };
 
 const TVMediaCard = memo(({ item, size = 'medium' }: TVMediaCardProps) => {
@@ -71,25 +84,64 @@ const TVMediaCard = memo(({ item, size = 'medium' }: TVMediaCardProps) => {
     <View style={styles.cardWrapper}>
       <Pressable onPress={handlePress} onLongPress={handleLongPress} onFocus={handleFocus} onBlur={handleBlur}>
         <Animated.View style={[styles.container, { width: dimensions.width, height: dimensions.height }, { transform: [{ scale: scaleAnim }] }, isFocused && styles.containerFocused]}>
-          <Image source={{ uri: tmdb?.poster || '' }} style={styles.poster} contentFit="cover" cachePolicy="memory-disk" />
-          <LinearGradient colors={['transparent', 'transparent', 'rgba(0,0,0,0.9)']} style={styles.gradient} />
-          {tmdb?.rating != null && tmdb.rating > 0 && (
-            <View style={[styles.ratingBadge, { backgroundColor: getRatingColor(tmdb.rating) }]}>
-              <Ionicons name="star" size={12} color="#000" />
-              <Text style={styles.ratingText}>{tmdb.rating.toFixed(1)}</Text>
+          {/* Poster */}
+          <Image 
+            source={{ uri: tmdb?.poster || '' }} 
+            style={styles.poster} 
+            contentFit="cover" 
+            transition={200}
+            cachePolicy="memory-disk" 
+          />
+          
+          {/* Gradient overlay */}
+          <LinearGradient 
+            colors={['transparent', 'transparent', 'rgba(0,0,0,0.9)']} 
+            style={styles.gradient} 
+          />
+          
+          {/* Rating Badge (Top Left) */}
+          {(tmdb?.rating || 0) > 0 && (
+            <View style={[styles.ratingBadge, { backgroundColor: getRatingColor(tmdb.rating!) }]}>
+              <Ionicons name="star" size={10} color="#000" />
+              <Text style={styles.ratingText}>{tmdb.rating!.toFixed(1)}</Text>
             </View>
           )}
-          {favorite && (
-            <View style={styles.favBadge}>
-              <Ionicons name="heart" size={16} color="#FF4757" />
-            </View>
-          )}
-          <View style={styles.typeBadge}>
-            <Ionicons name={item.type === 'movie' ? 'film-outline' : 'tv-outline'} size={14} color="white" />
+
+           {/* Favorite Indicator (Top Right) */}
+           <View style={[styles.favoriteBadge, favorite && styles.favoriteActive]}>
+            <Ionicons 
+              name={favorite ? 'heart' : 'heart-outline'} 
+              size={18} 
+              color={favorite ? '#FF4757' : 'white'} 
+            />
           </View>
+
+          {/* Type Badge (Bottom Left - Above Title) */}
+          <View style={styles.typeBadge}>
+            <Ionicons 
+              name={item.type === 'movie' ? 'film-outline' : 'tv-outline'} 
+              size={12} 
+              color="white" 
+            />
+          </View>
+
+          {/* Certification Badge (Bottom Right - Above Title) */}
+          {tmdb?.certification && (
+            <View style={[styles.certBadge, { borderColor: getCertificationColor(tmdb?.certification) }]}>
+              <Text style={[styles.certText, { color: getCertificationColor(tmdb?.certification) }]}>
+                {tmdb?.certification}
+              </Text>
+            </View>
+          )}
+          
+          {/* Title & Year */}
           <View style={styles.titleContainer}>
-            <Text style={styles.title} numberOfLines={2}>{tmdb?.title || item.name || 'Sem título'}</Text>
-            {tmdb?.year && <Text style={styles.year}>{tmdb.year}</Text>}
+            <Text style={styles.title} numberOfLines={2}>
+              {tmdb?.title || item.name || 'Sem título'}
+            </Text>
+            {tmdb?.year && typeof tmdb.year === 'string' && tmdb.year.length > 0 && (
+              <Text style={styles.year}>{tmdb.year}</Text>
+            )}
           </View>
         </Animated.View>
       </Pressable>
@@ -99,7 +151,7 @@ const TVMediaCard = memo(({ item, size = 'medium' }: TVMediaCardProps) => {
 
 TVMediaCard.displayName = 'TVMediaCard';
 
-const SCALE_PADDING = 6;
+const SCALE_PADDING = 20;
 
 const styles = StyleSheet.create({
   cardWrapper: {
@@ -114,21 +166,91 @@ const styles = StyleSheet.create({
   },
   containerFocused: {
     borderColor: Colors.primary,
-    elevation: 12,
-    shadowColor: '#6366F1',
+    // Shadow removed to prevent clipping and improve performance on TV
+    zIndex: 10,
+    elevation: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
   },
-  poster: { width: '100%', height: '100%', backgroundColor: Colors.surface },
-  gradient: { ...StyleSheet.absoluteFillObject },
-  ratingBadge: { position: 'absolute', top: Spacing.sm, left: Spacing.sm, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: BorderRadius.sm, gap: 3 },
-  ratingText: { color: '#000', fontSize: 13, fontWeight: '700' },
-  favBadge: { position: 'absolute', top: Spacing.sm, right: Spacing.sm, backgroundColor: 'rgba(255,71,87,0.3)', padding: 6, borderRadius: BorderRadius.full },
-  typeBadge: { position: 'absolute', bottom: 60, left: Spacing.sm, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: BorderRadius.sm },
-  titleContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.md },
-  title: { color: Colors.text, fontSize: Typography.caption.fontSize, fontWeight: '600', lineHeight: 20 },
-  year: { color: Colors.textSecondary, fontSize: 13, marginTop: 3 },
+  poster: { 
+    width: '100%', 
+    height: '100%', 
+    backgroundColor: Colors.surface 
+  },
+  gradient: { 
+    ...StyleSheet.absoluteFillObject 
+  },
+  ratingBadge: { 
+    position: 'absolute', 
+    top: Spacing.sm, 
+    left: Spacing.sm, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 6, 
+    paddingVertical: 3, 
+    borderRadius: BorderRadius.sm, 
+    gap: 2 
+  },
+  ratingText: { 
+    color: '#000', 
+    fontSize: 11, 
+    fontWeight: '700' 
+  },
+  favoriteBadge: { 
+    position: 'absolute', 
+    top: Spacing.sm, 
+    right: Spacing.sm, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    padding: 6, 
+    borderRadius: BorderRadius.full,
+    zIndex: 3
+  },
+  favoriteActive: {
+    backgroundColor: 'rgba(255,71,87,0.3)',
+  },
+  certBadge: {
+    position: 'absolute',
+    bottom: 60,
+    right: Spacing.sm,
+    borderWidth: 1.5,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 2,
+  },
+  certText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  typeBadge: { 
+    position: 'absolute', 
+    bottom: 60, 
+    left: Spacing.sm, 
+    backgroundColor: 'rgba(0,0,0,0.6)', 
+    padding: 4, 
+    borderRadius: BorderRadius.sm,
+    zIndex: 2,
+  },
+  titleContainer: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    padding: Spacing.sm,
+  },
+  title: { 
+    color: Colors.text, 
+    fontSize: Typography.caption.fontSize, 
+    fontWeight: '600', 
+    lineHeight: 20 
+  },
+  year: { 
+    color: Colors.textSecondary, 
+    fontSize: 12, 
+    marginTop: 2 
+  },
 });
 
 export default TVMediaCard;

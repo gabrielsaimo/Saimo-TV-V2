@@ -62,6 +62,26 @@ export function filterMedia(
     });
 }
 
+// Deduplicar mídia (por ID e por nome)
+export function deduplicateMedia(items: MediaItem[]): MediaItem[] {
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
+
+    return items.filter(item => {
+        // Checar ID
+        if (seenIds.has(item.id)) return false;
+
+        // Checar nome normalizado
+        const name = (item.tmdb?.title || item.name || '').toLowerCase().trim();
+        if (name && seenNames.has(name)) return false;
+
+        seenIds.add(item.id);
+        if (name) seenNames.add(name);
+
+        return true;
+    });
+}
+
 // Ordenar mídia
 export function sortMedia(
     items: MediaItem[],
