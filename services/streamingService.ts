@@ -86,10 +86,9 @@ function diskLoad(key: string): MediaItem[] | null {
 
 /**
  * Hydrate ALL pages from disk for instant startup display.
- * Restores the full catalog if it was previously cached.
- * Returns true if any data was restored.
+ * RESTORES asynchronously in chunks to avoid blocking the UI thread.
  */
-export function hydrateFromDisk(): boolean {
+export async function hydrateFromDisk(): Promise<boolean> {
     if (!ensureDisk()) {
         console.warn('[DiskCache] Hydration skipped — disk unavailable');
         return false;
@@ -99,38 +98,49 @@ export function hydrateFromDisk(): boolean {
     let count = 0;
     let totalItems = 0;
 
-    for (const cat of CATEGORIES) {
-        // Restore ALL pages for this category (p1, p2, p3, ...)
-        let page = 1;
-        let catItems: MediaItem[] = [];
+    // Process categories in chunks to yield to UI thread
+    const CHUNK_SIZE = 5;
 
-        while (true) {
-            const key = `${cat.id}-p${page}`;
-            if (PAGE_CACHE.has(key)) {
-                // Already in memory, still count it
-                catItems.push(...(PAGE_CACHE.get(key) || []));
-                page++;
-                continue;
-            }
+    for (let i = 0; i < CATEGORIES.length; i += CHUNK_SIZE) {
+        const batch = CATEGORIES.slice(i, i + CHUNK_SIZE);
 
-            const items = diskLoad(key);
-            if (!items || items.length === 0) break;
+        await new Promise<void>(resolve => {
+            // Immediate execution in next frame
+            setTimeout(() => {
+                for (const cat of batch) {
+                    // Restore ALL pages for this category
+                    let page = 1;
+                    let catItems: MediaItem[] = [];
 
-            PAGE_CACHE.set(key, items);
-            catItems.push(...items);
-            restored = true;
-            page++;
-        }
+                    while (true) {
+                        const key = `${cat.id}-p${page}`;
+                        if (PAGE_CACHE.has(key)) {
+                            catItems.push(...(PAGE_CACHE.get(key) || []));
+                            page++;
+                            continue;
+                        }
 
-        if (catItems.length > 0) {
-            CATEGORY_CACHE.set(cat.id, deduplicateItems(catItems));
-            LAST_PAGE.set(cat.id, page - 1);
-            // If last page had full 50 items, there might be more
-            const lastPageItems = PAGE_CACHE.get(`${cat.id}-p${page - 1}`);
-            HAS_MORE.set(cat.id, lastPageItems ? lastPageItems.length >= 50 : false);
-            count++;
-            totalItems += catItems.length;
-        }
+                        const items = diskLoad(key);
+                        if (!items || items.length === 0) break;
+
+                        PAGE_CACHE.set(key, items);
+                        catItems.push(...items);
+                        restored = true;
+                        page++;
+                    }
+
+                    if (catItems.length > 0) {
+                        CATEGORY_CACHE.set(cat.id, deduplicateItems(catItems));
+                        LAST_PAGE.set(cat.id, page - 1);
+                        const lastPageItems = PAGE_CACHE.get(`${cat.id}-p${page - 1}`);
+                        HAS_MORE.set(cat.id, lastPageItems ? lastPageItems.length >= 50 : false);
+                        count++;
+                        totalItems += catItems.length;
+                    }
+                }
+                resolve();
+            }, 0);
+        });
     }
 
     console.log(`[DiskCache] Hydration complete: ${count} categories, ${totalItems} items restored`);
@@ -486,8 +496,8 @@ export function isLoadingInBackground(): boolean {
 }
 
 const BG_PARALLEL = 2;       // categorias em paralelo no background
-const BG_PAGE_DELAY = 100;   // ms entre páginas (curto pq é background)
-const BG_CAT_DELAY = 50;     // ms entre categorias
+const BG_PAGE_DELAY = 200;   // ms entre páginas (mais gentil com TV box fraco)
+const BG_CAT_DELAY = 150;    // ms entre categorias
 
 export async function startBackgroundLoading(
     onNewData?: () => void

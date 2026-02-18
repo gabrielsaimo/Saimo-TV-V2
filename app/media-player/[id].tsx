@@ -239,6 +239,13 @@ export default function TVMediaPlayerScreen() {
     };
   }, [resetHideTimer]);
 
+  const handleClose = useCallback(async () => {
+    isMountedRef.current = false;
+    if (player) player.pause();
+    if (id) addToHistory(id);
+    router.back();
+  }, [id, router, addToHistory, player]);
+
   // Back Handler (remote back button)
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -248,12 +255,7 @@ export default function TVMediaPlayerScreen() {
     return () => handler.remove();
   }, [handleClose]);
 
-  const handleClose = useCallback(async () => {
-    isMountedRef.current = false;
-    if (player) player.pause();
-    if (id) addToHistory(id);
-    router.back();
-  }, [id, router, addToHistory, player]);
+
 
   const togglePlayPause = useCallback(() => {
     if (isPlaying) player.pause();

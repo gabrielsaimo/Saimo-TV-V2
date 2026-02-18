@@ -12,6 +12,21 @@ import {
 // Re-exportar categorias do streamingService
 export const MEDIA_CATEGORIES = CATEGORIES;
 
+// Utility: Duplicatas por NOME exato (case-insensitive)
+export function deduplicateByName(items: MediaItem[]): MediaItem[] {
+    const seen = new Set<string>();
+    const unique: MediaItem[] = [];
+
+    for (const item of items) {
+        const name = (item.tmdb?.title || item.name).trim().toLowerCase();
+        if (!seen.has(name)) {
+            seen.add(name);
+            unique.push(item);
+        }
+    }
+    return unique;
+}
+
 // Carregar preview (p1) de uma categoria
 export async function loadCategory(categoryId: string): Promise<MediaItem[]> {
     const existing = getCategoryItems(categoryId);
@@ -34,17 +49,20 @@ export async function loadMoreForCategory(categoryId: string): Promise<{
 
 // Buscar mídia por nome (nos dados carregados em memória)
 export function searchMedia(query: string, items?: MediaItem[]): MediaItem[] {
+    let results: MediaItem[] = [];
     // Se items fornecido, busca neles
     if (items && items.length > 0) {
         const normalized = query.toLowerCase().trim();
-        if (!normalized) return items;
-        return items.filter(item => {
+        if (!normalized) return deduplicateByName(items);
+        results = items.filter(item => {
             const title = item.tmdb?.title || item.name;
             return title.toLowerCase().includes(normalized);
         });
+    } else {
+        // Senão, busca em todo o cache
+        results = searchInLoadedData(query);
     }
-    // Senão, busca em todo o cache
-    return searchInLoadedData(query);
+    return deduplicateByName(results);
 }
 
 // Filtrar mídia

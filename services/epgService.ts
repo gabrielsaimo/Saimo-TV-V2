@@ -1,15 +1,16 @@
-// EPG Service - Cache persistente em disco (7 dias) via expo-file-system
-// Cada canal salvo em arquivo separado para evitar CursorWindow error do AsyncStorage
+// EPG Service - Cache em memória + disco (7 dias de TTL)
+// Nunca bloqueia a UI: parsing cede o JS thread entre canais
+// Per-file disk cache via expo-file-system v19 (sync API)
 
-import * as FileSystem from 'expo-file-system';
 import type { Program, CurrentProgram } from '../types';
 import { getEPGUrl, usesGuiaDeTV } from '../data/epgMappings';
+import { Paths, File as FSFile, Directory } from 'expo-file-system';
 
 // ===== CONSTANTES =====
 
 const FETCH_TIMEOUT = 15000;
 const CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
-const EPG_CACHE_DIR = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}epg_cache/`;
+const MEM_RETENTION_MS = 24 * 60 * 60 * 1000; // 24h em memória (economiza RAM)
 
 // Proxies CORS com fallback automático
 const CORS_PROXIES = [
@@ -18,47 +19,69 @@ const CORS_PROXIES = [
     (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
 ];
 
-// ===== CACHE EM MEMÓRIA + DISCO =====
+// ===== CACHE EM MEMÓRIA =====
 
 const memoryCache = new Map<string, Program[]>();
 const lastFetch = new Map<string, number>();
 const pendingFetches = new Map<string, Promise<Program[]>>();
 let currentProxyIndex = 0;
-let diskCacheLoaded = false;
 
 // Listeners para atualizações
 type EPGListener = (channelId: string, programs: Program[]) => void;
 const listeners = new Set<EPGListener>();
 
-// ===== CACHE PERSISTENTE (DISCO) =====
+// ===== CACHE EM DISCO (expo-file-system v19 — sync per-file) =====
 
-interface DiskCacheEntry {
-    fetchTime: number;
-    programs: Array<{
-        id: string;
-        title: string;
-        description?: string;
-        category?: string;
-        startTime: number; // timestamp ms
-        endTime: number;   // timestamp ms
-    }>;
+let _epgDir: Directory | null = null;
+let _diskReady = false;
+
+interface SerializedProgram {
+    id: string;
+    title: string;
+    description?: string;
+    category?: string;
+    startTime: number; // timestamp ms
+    endTime: number;   // timestamp ms
 }
 
-async function ensureCacheDir(): Promise<void> {
-    const info = await FileSystem.getInfoAsync(EPG_CACHE_DIR);
-    if (!info.exists) {
-        await FileSystem.makeDirectoryAsync(EPG_CACHE_DIR, { intermediates: true });
+interface DiskEntry {
+    fetchTime: number;
+    programs: SerializedProgram[];
+}
+
+function getEpgDir(): Directory {
+    if (!_epgDir) {
+        _epgDir = new Directory(Paths.document, 'epg');
+    }
+    return _epgDir;
+}
+
+function ensureDisk(): boolean {
+    if (_diskReady) return true;
+    try {
+        const dir = getEpgDir();
+        if (!dir.exists) {
+            dir.create({ intermediates: true, idempotent: true });
+        }
+        _diskReady = true;
+        return true;
+    } catch (e) {
+        console.warn('[EPGDisk] ensureDisk failed (will retry):', e);
+        return false;
     }
 }
 
-function channelCachePath(channelId: string): string {
-    const safe = channelId.replace(/[^a-zA-Z0-9_-]/g, '_');
-    return `${EPG_CACHE_DIR}${safe}.json`;
+function safeKey(channelId: string): string {
+    return channelId.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
-async function saveToDisk(channelId: string, programs: Program[], fetchTime: number): Promise<void> {
+/** Save per-channel EPG to individual file (sync — no async overhead) */
+function diskSave(channelId: string, programs: Program[], fetchTime: number): void {
     try {
-        const entry: DiskCacheEntry = {
+        if (!ensureDisk()) return;
+        const dir = getEpgDir();
+        const file = new FSFile(dir, `${safeKey(channelId)}.json`);
+        const entry: DiskEntry = {
             fetchTime,
             programs: programs.map(p => ({
                 id: p.id,
@@ -69,59 +92,36 @@ async function saveToDisk(channelId: string, programs: Program[], fetchTime: num
                 endTime: p.endTime.getTime(),
             })),
         };
-        await FileSystem.writeAsStringAsync(
-            channelCachePath(channelId),
-            JSON.stringify(entry),
-        );
-    } catch {
-        // Silently fail - memory cache still works
+        file.create({ overwrite: true });
+        file.write(JSON.stringify(entry));
+    } catch (e) {
+        console.warn('[EPGDisk] diskSave failed:', channelId, e);
     }
 }
 
-async function loadAllFromDisk(): Promise<void> {
-    if (diskCacheLoaded) return;
-    diskCacheLoaded = true;
-
+/** Load per-channel EPG from individual file (sync — instant read) */
+function diskLoad(channelId: string): { programs: Program[], fetchTime: number } | null {
     try {
-        await ensureCacheDir();
-        const files = await FileSystem.readDirectoryAsync(EPG_CACHE_DIR);
+        if (!ensureDisk()) return null;
+        const dir = getEpgDir();
+        const file = new FSFile(dir, `${safeKey(channelId)}.json`);
+        if (!file.exists || file.size === 0) return null;
+        const raw = file.textSync();
+        if (!raw || raw.length < 2) return null;
+        const entry: DiskEntry = JSON.parse(raw);
         const now = Date.now();
-
-        for (const file of files) {
-            if (!file.endsWith('.json')) continue;
-            try {
-                const content = await FileSystem.readAsStringAsync(`${EPG_CACHE_DIR}${file}`);
-                const entry: DiskCacheEntry = JSON.parse(content);
-
-                // Skip expired cache
-                if ((now - entry.fetchTime) >= CACHE_DURATION_MS) {
-                    FileSystem.deleteAsync(`${EPG_CACHE_DIR}${file}`, { idempotent: true }).catch(() => { });
-                    continue;
-                }
-
-                const channelId = file.replace('.json', '');
-                // Only load if not already in memory (memory is fresher)
-                if (!memoryCache.has(channelId)) {
-                    const programs: Program[] = entry.programs.map(p => ({
-                        id: p.id,
-                        title: p.title,
-                        description: p.description || '',
-                        category: p.category,
-                        startTime: new Date(p.startTime),
-                        endTime: new Date(p.endTime),
-                    }));
-                    memoryCache.set(channelId, programs);
-                    lastFetch.set(channelId, entry.fetchTime);
-                    // Notify listeners so cards show cached EPG immediately
-                    listeners.forEach(listener => listener(channelId, programs));
-                }
-            } catch {
-                // Skip corrupted files
-            }
-        }
-        console.log(`EPG: loaded ${memoryCache.size} channels from disk cache`);
-    } catch {
-        // Cache dir doesn't exist yet, that's fine
+        if ((now - entry.fetchTime) >= CACHE_DURATION_MS) return null; // expirado
+        const programs: Program[] = entry.programs.map(p => ({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            category: p.category,
+            startTime: new Date(p.startTime),
+            endTime: new Date(p.endTime),
+        }));
+        return { programs, fetchTime: entry.fetchTime };
+    } catch (e) {
+        return null;
     }
 }
 
@@ -150,6 +150,11 @@ async function fetchWithTimeout(url: string, timeout: number): Promise<Response>
         clearTimeout(timeoutId);
         throw error;
     }
+}
+
+/** Yield para o JS thread — garante que toques e navegação são processados */
+function yieldToUI(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 0));
 }
 
 // ===== PARSING HTML =====
@@ -302,12 +307,13 @@ async function fetchWithProxyFallback(
 // ===== API PÚBLICA =====
 
 export async function initEPGService(): Promise<void> {
-    await loadAllFromDisk();
-    console.log(`EPG Service initialized (disk cache: ${memoryCache.size} channels)`);
+    // Garante que o diretório de cache existe (não carrega tudo — lazy per-channel)
+    ensureDisk();
+    console.log('EPG Service initialized (lazy per-channel cache)');
 }
 
 export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
-    // Verifica cache válido
+    // 1. Verifica cache em memória
     const cached = memoryCache.get(channelId);
     const fetchTime = lastFetch.get(channelId) || 0;
     const now = Date.now();
@@ -320,13 +326,30 @@ export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
         }
     }
 
-    // Verifica fetch pendente
+    // 2. Verifica cache em disco (sem fetch de rede) — lazy load per-channel
+    if (!cached || cached.length === 0) {
+        const disk = diskLoad(channelId);
+        if (disk) {
+            const nowDate = new Date();
+            const futurePrograms = disk.programs.filter(p => p.endTime > nowDate);
+            if (futurePrograms.length >= 3) {
+                // Carrega disco → memória (apenas 24h)
+                const tomorrow = new Date(now + MEM_RETENTION_MS);
+                const memPrograms = disk.programs.filter(p => p.startTime < tomorrow);
+                memoryCache.set(channelId, memPrograms);
+                lastFetch.set(channelId, disk.fetchTime);
+                return memPrograms;
+            }
+        }
+    }
+
+    // 3. Verifica fetch pendente (evita requests duplicados)
     const pending = pendingFetches.get(channelId);
     if (pending) {
         return pending;
     }
 
-    // Inicia novo fetch
+    // 4. Fetch da rede
     const fetchPromise = (async (): Promise<Program[]> => {
         const url = getEPGUrl(channelId);
         if (!url) return cached || [];
@@ -336,23 +359,29 @@ export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
 
         if (!html) return cached || [];
 
+        // Cede o JS thread antes do parsing (previne travamento da UI)
+        await yieldToUI();
+
         const programs = source === 'guiadetv'
             ? parseGuiadetvPrograms(html, channelId)
             : parseMeuguiaPrograms(html, channelId);
 
         if (programs.length > 0) {
-            // Mantém apenas próximas 48 horas para economizar espaço
-            const cutoff = new Date(Date.now() + 48 * 60 * 60 * 1000);
-            const filteredPrograms = programs.filter(p => p.startTime < cutoff);
+            const now = Date.now();
 
-            const ft = Date.now();
-            memoryCache.set(channelId, filteredPrograms);
-            lastFetch.set(channelId, ft);
+            // Disco: armazena 7 dias de programas
+            const sevenDaysFromNow = new Date(now + 7 * 24 * 60 * 60 * 1000);
+            const diskPrograms = programs.filter(p => p.startTime < sevenDaysFromNow);
+            diskSave(channelId, diskPrograms, now);
 
-            // Salva em disco (fire-and-forget, não bloqueia)
-            saveToDisk(channelId, filteredPrograms, ft).catch(() => { });
+            // Memória: mantém apenas próximas 24 horas (economiza RAM em TV box)
+            const tomorrow = new Date(now + MEM_RETENTION_MS);
+            const memPrograms = programs.filter(p => p.startTime < tomorrow);
 
-            listeners.forEach(listener => listener(channelId, filteredPrograms));
+            memoryCache.set(channelId, memPrograms);
+            lastFetch.set(channelId, now);
+
+            listeners.forEach(listener => listener(channelId, memPrograms));
         }
 
         return programs;
@@ -389,7 +418,6 @@ export function getCurrentProgram(channelId: string): CurrentProgram | null {
     const elapsed = now.getTime() - current.startTime.getTime();
     const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100));
 
-    // Tempo restante em minutos
     const remaining = Math.round((current.endTime.getTime() - now.getTime()) / 60000);
 
     return { current, next, progress, remaining };
@@ -405,16 +433,29 @@ export function hasEPG(channelId: string): boolean {
     return !!programs && programs.length > 0;
 }
 
+/** Verifica se canal tem cache fresco (memória) — sem load de disco nem fetch */
+export function hasFreshCache(channelId: string): boolean {
+    const cached = memoryCache.get(channelId);
+    const fetchTime = lastFetch.get(channelId) || 0;
+    if (!cached || cached.length === 0) return false;
+    const nowDate = new Date();
+    const futurePrograms = cached.filter(p => p.endTime > nowDate);
+    return (Date.now() - fetchTime) < CACHE_DURATION_MS && futurePrograms.length >= 3;
+}
+
 export async function clearEPGCache(): Promise<void> {
     memoryCache.clear();
     lastFetch.clear();
+    // Apaga diretório de cache do disco e recria
     try {
-        const info = await FileSystem.getInfoAsync(EPG_CACHE_DIR);
-        if (info.exists) {
-            await FileSystem.deleteAsync(EPG_CACHE_DIR, { idempotent: true });
+        const dir = getEpgDir();
+        if (dir.exists) {
+            dir.delete();
         }
-    } catch {
-        // Ignore cleanup errors
+        _diskReady = false;
+        ensureDisk();
+    } catch (e) {
+        console.warn('[EPGDisk] clearEPGCache failed:', e);
     }
 }
 
@@ -426,7 +467,7 @@ export function getEPGStats() {
     };
 }
 
-// Prefetch EPG para canais visíveis
+/** Busca EPG de um único canal em background — não bloqueia UI */
 export async function prefetchEPG(channelIds: string[]): Promise<void> {
     const promises = channelIds.map(id =>
         fetchChannelEPG(id).catch(() => [])
@@ -434,40 +475,7 @@ export async function prefetchEPG(channelIds: string[]): Promise<void> {
     await Promise.all(promises);
 }
 
-// Verifica se canal tem mapeamento EPG (sem fetch)
+/** Verifica se canal tem mapeamento EPG (sem fetch) */
 export function hasEPGMapping(channelId: string): boolean {
     return getEPGUrl(channelId) !== null;
-}
-
-/**
- * Loads EPGs with concurrency limit and progress tracking to avoid UI freeze.
- */
-export async function loadEPGsWithProgress(
-    channelIds: string[],
-    onProgress: (current: number, total: number) => void
-): Promise<void> {
-    const total = channelIds.length;
-    let completed = 0;
-    const CONCURRENCY_LIMIT = 3; // Low concurrency to keep UI smooth
-
-    // Helper to process a single item
-    const processItem = async (id: string) => {
-        try {
-            await fetchChannelEPG(id);
-        } catch (e) {
-            // Ignore errors, just count as done
-        } finally {
-            completed++;
-            onProgress(completed, total);
-        }
-    };
-
-    // Process chunk by chunk
-    for (let i = 0; i < total; i += CONCURRENCY_LIMIT) {
-        const chunk = channelIds.slice(i, i + CONCURRENCY_LIMIT);
-        await Promise.all(chunk.map(id => processItem(id)));
-
-        // Small delay to yield to UI thread
-        await new Promise(resolve => setTimeout(resolve, 50));
-    }
 }

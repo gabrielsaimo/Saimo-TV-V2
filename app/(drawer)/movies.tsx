@@ -1,19 +1,20 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef, memo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TextInput,
   ActivityIndicator,
   InteractionManager,
+  FlatList,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
 import TVPressable from '../../components/TVPressable';
 import { useMediaStore } from '../../stores/mediaStore';
-import { filterMedia, sortMedia, getAllGenres, deduplicateMedia } from '../../services/mediaService';
+import { filterMedia, sortMedia, getAllGenres, deduplicateMedia, deduplicateByName } from '../../services/mediaService';
 import {
   CATEGORIES,
   fetchCategoryPage,
@@ -30,6 +31,58 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import type { MediaItem } from '../../types';
 import TVMediaCard from '../../components/TVMediaCard';
 import TVMediaRow from '../../components/TVMediaRow';
+import TVFilterBar from '../../components/TVFilterBar';
+import { getAllTrending } from '../../services/trendingService';
+
+// ─── Trending UI components ────────────────────────────────────────────────
+
+/** Skeleton placeholder shown while trending data loads */
+const TrendingSkeleton = memo(() => (
+  <View style={skeletonStyles.section}>
+    <View style={skeletonStyles.header}>
+      <Text style={skeletonStyles.title}>🔥 Tendências</Text>
+      <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: Spacing.md }} />
+    </View>
+    <View style={skeletonStyles.row}>
+      {Array.from({ length: 7 }).map((_, i) => (
+        <View key={i} style={skeletonStyles.card} />
+      ))}
+    </View>
+  </View>
+));
+TrendingSkeleton.displayName = 'TrendingSkeleton';
+
+/** A horizontal row of trending items — no "Ver tudo" button needed */
+const TrendingRow = memo(({ title, items }: { title: string; items: MediaItem[] }) => {
+  if (items.length === 0) return null;
+  return (
+    <View style={trendingStyles.container}>
+      <View style={trendingStyles.header}>
+        <View style={trendingStyles.titleRow}>
+          <Text style={trendingStyles.title}>{title}</Text>
+          <View style={trendingStyles.badge}>
+            <Text style={trendingStyles.badgeText}>{items.length}</Text>
+          </View>
+        </View>
+      </View>
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={trendingStyles.list}
+        renderItem={({ item }) => <TVMediaCard item={item} size="medium" />}
+        initialNumToRender={6}
+        maxToRenderPerBatch={4}
+        windowSize={3}
+        removeClippedSubviews
+      />
+    </View>
+  );
+});
+TrendingRow.displayName = 'TrendingRow';
+
+// ────────────────────────────────────────────────────────────────────────────
 
 const ADULT_CATEGORY_IDS = [
   'hot-adultos-bella-da-semana',
@@ -64,6 +117,12 @@ export default function MoviesScreen() {
   } = useMediaStore();
 
   const { adultUnlocked } = useSettingsStore();
+
+  // Trending
+  const [trendingToday, setTrendingToday] = useState<MediaItem[]>([]);
+  const [trendingWeek, setTrendingWeek] = useState<MediaItem[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(true);
+  const trendingLoadedRef = useRef(false);
 
   const lastSyncRef = useRef(0);
   const mountedRef = useRef(true);
@@ -142,6 +201,32 @@ export default function MoviesScreen() {
     setTotalLoaded(getTotalLoadedCount());
   }, []);
 
+  // Load trending lazily — never blocks catalog display
+  const loadTrending = useCallback(async () => {
+    if (!mountedRef.current) return;
+    try {
+      const { today, week } = await getAllTrending();
+      if (mountedRef.current) {
+        setTrendingToday(today);
+        setTrendingWeek(week);
+      }
+    } catch {
+      // Fail silently — trending is non-critical
+    } finally {
+      if (mountedRef.current) setTrendingLoading(false);
+    }
+  }, []);
+
+  // Start trending load once the first catalog batch is done (loading → false)
+  useEffect(() => {
+    if (!loading && !trendingLoadedRef.current) {
+      trendingLoadedRef.current = true;
+      InteractionManager.runAfterInteractions(() => {
+        if (mountedRef.current) loadTrending();
+      });
+    }
+  }, [loading, loadTrending]);
+
   const startBgLoad = useCallback(() => {
     InteractionManager.runAfterInteractions(() => {
       if (!mountedRef.current) return;
@@ -159,7 +244,7 @@ export default function MoviesScreen() {
   }, [syncFromCache]);
 
   const loadCatalog = async (isRefresh: boolean) => {
-    if (!isRefresh && !catalogLoadedRef.current) hydrateFromDisk();
+    if (!isRefresh && !catalogLoadedRef.current) await hydrateFromDisk();
     const cachedCategories = getAllLoadedCategories();
     const cachedCount = getTotalLoadedCount();
     if (cachedCategories.size > 0 && !isRefresh) {
@@ -231,6 +316,8 @@ export default function MoviesScreen() {
     });
     return deduplicateMedia(items);
   }, [categories]);
+
+  const genres = useMemo(() => getAllGenres(allItems), [allItems]);
 
   const filteredItems = useMemo(() => {
     if (debouncedQuery.trim()) return [];
@@ -308,40 +395,110 @@ export default function MoviesScreen() {
         </View>
       )}
 
+      <TVFilterBar genres={genres} />
+
       {showGrid ? (
-        <FlatList
+        <FlashList<MediaItem>
           key="grid"
           data={gridData}
           keyExtractor={(item) => item.id}
           numColumns={TV.mediaColumns}
           renderItem={renderGridItem}
           contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={15}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-          removeClippedSubviews
+          estimatedItemSize={TV.mediaCardHeight + Spacing.md}
           ListHeaderComponent={
             <Text style={styles.resultsText}>{gridData.length} resultados</Text>
           }
+          ListFooterComponent={
+            bgLoading ? (
+              <View style={styles.footerLoading}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.footerText}>Carregando mais...</Text>
+              </View>
+            ) : null
+          }
+          {...({} as any)}
         />
       ) : (
-        <FlatList
+        <FlashList<CategoryRowData>
           key="rows"
           data={categoryData}
           keyExtractor={(item) => item.id}
           renderItem={renderCategoryRow}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={4}
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          removeClippedSubviews
+          estimatedItemSize={TV.mediaCardHeight + 80}
+          ListHeaderComponent={
+            trendingLoading ? (
+              <TrendingSkeleton />
+            ) : (trendingToday.length > 0 || trendingWeek.length > 0) ? (
+              <>
+                <TrendingRow title="🔥 Tendências de Hoje" items={trendingToday} />
+                <TrendingRow title="📅 Tendências da Semana" items={trendingWeek} />
+              </>
+            ) : null
+          }
+          ListFooterComponent={
+            bgLoading ? (
+              <View style={styles.footerLoading}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.footerText}>Carregando mais...</Text>
+              </View>
+            ) : null
+          }
+          {...({} as any)}
         />
       )}
     </View>
   );
 }
+
+// Skeleton styles
+const skeletonStyles = StyleSheet.create({
+  section: { marginBottom: Spacing.xl },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: Spacing.xl, marginBottom: Spacing.md,
+  },
+  title: { color: Colors.textSecondary, fontSize: Typography.h3.fontSize, fontWeight: '700' },
+  row: { flexDirection: 'row', paddingHorizontal: Spacing.xl, gap: Spacing.md },
+  card: {
+    width: TV.mediaCardWidth,
+    height: TV.mediaCardHeight,
+    backgroundColor: Colors.surfaceVariant,
+    borderRadius: BorderRadius.md,
+    opacity: 0.4,
+  },
+});
+
+// Trending row styles
+const trendingStyles = StyleSheet.create({
+  container: { marginBottom: Spacing.xl },
+  header: {
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.md,
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  title: {
+    color: Colors.text,
+    fontSize: Typography.h3.fontSize,
+    fontWeight: '700',
+  },
+  badge: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    minWidth: 28,
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: Colors.text,
+    fontSize: Typography.label.fontSize,
+    fontWeight: '700',
+  },
+  list: { paddingHorizontal: Spacing.xl },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
@@ -360,4 +517,6 @@ const styles = StyleSheet.create({
   grid: { paddingHorizontal: Spacing.xl },
   gridRow: { gap: Spacing.md, marginBottom: Spacing.md },
   resultsText: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginBottom: Spacing.md },
+  footerLoading: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xl },
+  footerText: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize },
 });

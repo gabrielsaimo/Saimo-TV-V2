@@ -15,14 +15,13 @@ import type { Channel, CurrentProgram } from '../types';
 import { Colors, BorderRadius, Spacing, Typography, TV } from '../constants/Colors';
 import { useFavoritesStore } from '../stores/favoritesStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { getCurrentProgram, onEPGUpdate, hasEPGMapping } from '../services/epgService';
+import { getCurrentProgram, fetchChannelEPG, onEPGUpdate, hasEPGMapping } from '../services/epgService';
 
 interface TVChannelCardProps {
   channel: Channel;
-  epgReady?: boolean;
 }
 
-const TVChannelCard = memo(({ channel, epgReady = true }: TVChannelCardProps) => {
+const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
   const router = useRouter();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const showEPG = useSettingsStore(state => state.showEPG);
@@ -30,20 +29,50 @@ const TVChannelCard = memo(({ channel, epgReady = true }: TVChannelCardProps) =>
 
   const [favorite, setFavorite] = useState(isFavorite(channel.id));
   const [currentEPG, setCurrentEPG] = useState<CurrentProgram | null>(null);
+  const [epgLoading, setEpgLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const isMountedRef = useRef(true);
 
   const hasMapping = hasEPGMapping(channel.id);
 
+  // Lazy EPG loading: each card fetches its own EPG on mount
   useEffect(() => {
     isMountedRef.current = true;
-    if (showEPG && hasMapping) setCurrentEPG(getCurrentProgram(channel.id));
+
+    if (!showEPG || !hasMapping) return;
+
+    // Try memory cache first (instant)
+    const cached = getCurrentProgram(channel.id);
+    if (cached) {
+      setCurrentEPG(cached);
+    } else {
+      // Fetch in background
+      setEpgLoading(true);
+      fetchChannelEPG(channel.id)
+        .then(() => {
+          if (isMountedRef.current) {
+            setCurrentEPG(getCurrentProgram(channel.id));
+            setEpgLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMountedRef.current) setEpgLoading(false);
+        });
+    }
+
+    // Listen for updates from other sources
     const unsubscribe = onEPGUpdate((updatedId) => {
-      if (isMountedRef.current && updatedId === channel.id && showEPG)
+      if (isMountedRef.current && updatedId === channel.id && showEPG) {
         setCurrentEPG(getCurrentProgram(channel.id));
+        setEpgLoading(false);
+      }
     });
-    return () => { isMountedRef.current = false; unsubscribe(); };
+
+    return () => {
+      isMountedRef.current = false;
+      unsubscribe();
+    };
   }, [channel.id, showEPG, hasMapping]);
 
   useEffect(() => { setFavorite(isFavorite(channel.id)); }, [isFavorite, channel.id]);
@@ -96,9 +125,7 @@ const TVChannelCard = memo(({ channel, epgReady = true }: TVChannelCardProps) =>
           <Text style={styles.category} numberOfLines={1}>{channel.category}</Text>
           {showEPG && (
             <View style={styles.epgContainer}>
-              {!epgReady ? (
-                <Text style={styles.loadingText}>Carregando guia...</Text>
-              ) : currentEPG?.current ? (
+              {currentEPG?.current ? (
                 <>
                   <View style={styles.liveRow}>
                     <View style={styles.liveDot} />
@@ -109,10 +136,12 @@ const TVChannelCard = memo(({ channel, epgReady = true }: TVChannelCardProps) =>
                     <View style={[styles.progressFill, { width: `${currentEPG.progress}%` }]} />
                   </View>
                 </>
-              ) : hasMapping ? (
+              ) : epgLoading ? (
                  <Text style={styles.loadingText}>Carregando...</Text>
-              ) : (
+              ) : hasMapping ? (
                  <Text style={styles.loadingText}>Sem informações</Text>
+              ) : (
+                 <Text style={styles.loadingText}>Sem guia</Text>
               )}
             </View>
           )}
@@ -141,11 +170,12 @@ const styles = StyleSheet.create({
   },
   containerFocused: {
     borderColor: Colors.primary,
-    elevation: 12,
-    shadowColor: '#6366F1',
+    // Shadow removed to prevent clipping and improve performance on TV
+    zIndex: 10,
+    elevation: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
   },
   imageContainer: {
     width: '100%',

@@ -154,11 +154,12 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     alignItems: 'center',
     gap: Spacing.sm,
-    height: 60,
+    height: 80, // Increased from 60 to prevent clipping
   },
   filterBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center', // Added
     backgroundColor: Colors.surface,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
@@ -175,6 +176,8 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: Typography.body.fontSize,
     fontWeight: '600',
+    textAlignVertical: 'center', // Added
+    includeFontPadding: false, // Added
   },
   clearBtn: {
     flexDirection: 'row',
@@ -192,6 +195,8 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: Typography.body.fontSize,
     fontWeight: '600',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   divider: {
     width: 1,
@@ -202,6 +207,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
+    justifyContent: 'center', // Added
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -222,10 +228,14 @@ const styles = StyleSheet.create({
   chipText: {
     color: Colors.textSecondary,
     fontSize: Typography.caption.fontSize,
+    textAlignVertical: 'center', // Added
+    includeFontPadding: false, // Added
   },
   chipTextActive: {
     color: Colors.primary,
     fontWeight: '600',
+    textAlignVertical: 'center', // Added
+    includeFontPadding: false, // Added
   },
   genreSection: {
     paddingTop: Spacing.sm,

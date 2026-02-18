@@ -19,7 +19,8 @@ import { Colors, BorderRadius, Spacing, Typography } from '../../constants/Color
 import TVPressable from '../../components/TVPressable';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { getCurrentProgram, fetchChannelEPG } from '../../services/epgService';
-import { channels as allChannelsList, getChannelById } from '../../data/channels';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { getAllChannels, getChannelById } from '../../data/channels';
 import { useTVKeyHandler } from '../../hooks/useTVKeyHandler';
 
 function getResolutionLabel(h: number): string {
@@ -33,9 +34,18 @@ function getResolutionLabel(h: number): string {
 }
 
 export default function TVPlayerScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const channel = getChannelById(id);
+  const { id: initialId } = useLocalSearchParams<{ id: string }>();
+  const [currentChannelId, setCurrentChannelId] = useState(initialId);
+  const channel = getChannelById(currentChannelId);
   const router = useRouter();
+
+  // Settings
+  const { adultUnlocked } = useSettingsStore();
+
+  // Compute available channels based on settings
+  const allChannelsList = useMemo(() => {
+    return getAllChannels(adultUnlocked);
+  }, [adultUnlocked]);
 
   // Video player
   const player = useVideoPlayer(channel?.url || '', player => {
@@ -62,52 +72,56 @@ export default function TVPlayerScreen() {
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
-  // Channel navigation
-  const currentIndex = useMemo(() => {
-    return allChannelsList.findIndex(ch => ch.id === channel?.id);
-  }, [channel?.id]);
-
-  const switchToChannel = useCallback((target: Channel) => {
-    if (!target || target.id === channel?.id) return;
-    setShowControls(false);
-    setShowGuide(false);
-    setShowMenu(false);
-    setFavorite(isFavorite(target.id));
-    // Use setParams for smoother transition on same screen
-    router.setParams({ id: target.id });
-  }, [channel?.id, router, isFavorite]);
+  // Channel navigation — use refs for the key handler to avoid stale closures
+  const currentIndexRef = useRef(allChannelsList.findIndex(ch => ch.id === currentChannelId));
+  
+  // Update ref when channel or list changes
+  useEffect(() => {
+    currentIndexRef.current = allChannelsList.findIndex(ch => ch.id === currentChannelId);
+  }, [currentChannelId, allChannelsList]);
 
   const switchChannelByOffset = useCallback((offset: number) => {
-    let idx = currentIndex;
-    // Fallback if index not found
+    const idx = currentIndexRef.current;
     if (idx < 0) {
-      console.warn('Current channel index not found, defaulting to 0');
-      idx = 0;
+      console.warn('Channel index not found');
+      // Fallback: try to find by ID again or reset to 0
+      const currentIdx = allChannelsList.findIndex(ch => ch.id === currentChannelId);
+      if (currentIdx >= 0) {
+         currentIndexRef.current = currentIdx;
+      } else {
+         return;
+      }
     }
-    
+
     const nextIndex = (idx + offset + allChannelsList.length) % allChannelsList.length;
     const nextChannel = allChannelsList[nextIndex];
-    
-    console.log(`Switching channel: ${channel?.name} (${idx}) -> ${nextChannel?.name} (${nextIndex})`);
+
+    console.log(`[CHANNEL SWITCH] ${allChannelsList[idx]?.name} (${idx}) → ${nextChannel?.name} (${nextIndex})`);
 
     if (nextChannel) {
+      // Show cached EPG immediately if already loaded for this channel
+      setEpg(getCurrentProgram(nextChannel.id));
       setOsdChannel(nextChannel);
-      switchToChannel(nextChannel);
+      setShowControls(false);
+      setShowGuide(false);
+      setShowMenu(false);
+      setFavorite(isFavorite(nextChannel.id));
+      setCurrentChannelId(nextChannel.id);
     }
-  }, [currentIndex, switchToChannel, channel, allChannelsList]);
+  }, [isFavorite, allChannelsList, currentChannelId]);
 
   // OSD auto-hide
   useEffect(() => {
     if (osdChannel) {
       if (osdTimeoutRef.current) clearTimeout(osdTimeoutRef.current);
-      osdTimeoutRef.current = setTimeout(() => setOsdChannel(null), 3000);
+      osdTimeoutRef.current = setTimeout(() => setOsdChannel(null), 5000);
     }
     return () => {
       if (osdTimeoutRef.current) clearTimeout(osdTimeoutRef.current);
     };
   }, [osdChannel]);
 
-  // Channel change without remount
+  // Channel change: when currentChannelId changes, replace the video source
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (!channel) return;
@@ -115,9 +129,10 @@ export default function TVPlayerScreen() {
       isFirstRender.current = false;
       return;
     }
+    console.log(`[PLAYER] Replacing source → ${channel.name} (${channel.url.substring(0, 60)}...)`);
     setHasError(false);
-    try { player.replace(channel.url); player.play(); } catch {}
-  }, [channel?.url, player]);
+    try { player.replace(channel.url); player.play(); } catch (e) { console.warn('[PLAYER] replace error:', e); }
+  }, [currentChannelId, player]);
 
   // Player status listener
   useEffect(() => {
@@ -153,7 +168,7 @@ export default function TVPlayerScreen() {
       if (isMountedRef.current) setEpg(getCurrentProgram(channel.id));
     }, 30000);
     return () => clearInterval(interval);
-  }, [channel?.id]);
+  }, [currentChannelId]);
 
   // Auto-hide controls
   useEffect(() => {
@@ -167,11 +182,17 @@ export default function TVPlayerScreen() {
     };
   }, [showControls, hasError]);
 
+  // Store switchChannelByOffset in ref for the key handler to avoid stale closure
+  const switchChannelByOffsetRef = useRef(switchChannelByOffset);
+  switchChannelByOffsetRef.current = switchChannelByOffset;
+
   // D-pad / Remote key handler
   const { setMode } = useTVKeyHandler(
     (event) => {
-      // Only trigger on Key Up (release) to prevent double-firing (since we listen to both down/up now)
+      // Only trigger on Key Up (release) to prevent double-firing
       if (event.action === 'down') return;
+
+      console.log(`[KEY] eventType=${event.eventType} keyCode=${event.keyCode} action=${event.action}`);
 
       // Priority 1: Menu Key - Always toggle menu
       if (event.eventType === 'menu') {
@@ -188,53 +209,44 @@ export default function TVPlayerScreen() {
       // Priority 2: If Side Menu or Guide is open, let them handle nav (Passthrough)
       if (showGuide || showMenu) return;
 
-      // Priority 3: If Controls are visible, let Native Focus handle navigation (Passthrough)
-      // This allows the user to D-pad to the "Favorite" button and press Select.
-      if (showControls) {
-          // Still handle 'Back' or special shortcuts if needed, but ignore Up/Down for channel switching
-          if (event.eventType === 'select') {
-             // Let default 'dpad center' happen natively on the focused button?
-             // Or if we need to force it... 
-             // Usually native focus + select work automatically if we don't interfere.
-          }
-          return; 
-      }
-
-      // Priority 4: Video Playing State (No UI) -> Custom Actions
+      // Priority 3: Up/Down ALWAYS switches channels — even when controls are visible
+      // (controls auto-hide when switchChannelByOffset is called)
       switch (event.eventType) {
         case 'up':
         case 'channelUp':
-          switchChannelByOffset(-1);
-          break;
+          console.log('[KEY] Switching channel UP');
+          switchChannelByOffsetRef.current(-1);
+          return;
         case 'down':
         case 'channelDown':
-          switchChannelByOffset(1);
-          break;
+          console.log('[KEY] Switching channel DOWN');
+          switchChannelByOffsetRef.current(1);
+          return;
+      }
+
+      // Priority 4: If Controls are visible, let native focus handle select/left/right for buttons
+      if (showControls) return;
+
+      // Full-screen video mode only
+      switch (event.eventType) {
         case 'select':
         case 'playPause':
           handleScreenPress();
-          break;
+          return;
       }
     },
   );
 
   // Switch key interception mode when overlays open/close
   useEffect(() => {
-    // If Guide or Menu is open, we need PassThrough for list navigation
+    // Guide/Menu open: passthrough so native focus can navigate the list
     if (showGuide || showMenu) {
       setMode('passthrough');
       return;
     }
-
-    // If controls are visible, we need PassThrough to navigate to buttons (like Favorite)
-    if (showControls) {
-      setMode('passthrough');
-      return;
-    }
-
-    // Otherwise (Video playing full screen), Intercept for Channel Switching
+    // All other states: intercept — we handle up/down ourselves regardless of controls state
     setMode('intercept');
-  }, [showGuide, showMenu, showControls, setMode]);
+  }, [showGuide, showMenu, setMode]);
 
   // Back Handler (remote back button)
   useEffect(() => {
@@ -279,7 +291,7 @@ export default function TVPlayerScreen() {
       channel: ch,
       epg: getCurrentProgram(ch.id),
     }));
-  }, [showGuide]);
+  }, [showGuide, allChannelsList]);
 
   const guideScrollRef = useRef<ScrollView>(null);
 
@@ -292,8 +304,8 @@ export default function TVPlayerScreen() {
   const handleSwitchChannel = useCallback((target: Channel) => {
     setShowGuide(false);
     setFavorite(isFavorite(target.id));
-    router.setParams({ id: target.id });
-  }, [router, isFavorite]);
+    setCurrentChannelId(target.id);
+  }, [isFavorite]);
 
   // Scroll to current channel in guide
   useEffect(() => {
@@ -305,7 +317,7 @@ export default function TVPlayerScreen() {
         }, 50);
       }
     }
-  }, [showGuide, channel?.id]);
+  }, [showGuide, channel?.id, allChannelsList]);
 
   const formatRemaining = (minutes?: number) => {
     if (!minutes) return '';
@@ -481,10 +493,44 @@ export default function TVPlayerScreen() {
         {osdChannel && !showGuide && !showMenu && (
           <View style={styles.osdContainer}>
             <View style={styles.osdContent}>
-              <Text style={styles.osdNumber}>{osdChannel.channelNumber}</Text>
+              {/* Left: channel number + nav arrows */}
+              <View style={styles.osdLeft}>
+                <Text style={styles.osdNavArrow}>▲</Text>
+                <Text style={styles.osdNumber}>
+                  {osdChannel.channelNumber != null
+                    ? String(osdChannel.channelNumber).padStart(2, '0')
+                    : '—'}
+                </Text>
+                <Text style={styles.osdNavArrow}>▼</Text>
+              </View>
+
+              {/* Right: channel name + EPG info */}
               <View style={styles.osdInfo}>
                 <Text style={styles.osdName} numberOfLines={1}>{osdChannel.name}</Text>
                 <Text style={styles.osdCategory}>{osdChannel.category}</Text>
+
+                {epg?.current && (
+                  <View style={styles.osdEpg}>
+                    <View style={styles.osdLiveRow}>
+                      <View style={styles.osdLiveDot} />
+                      <Text style={styles.osdLiveText}>AO VIVO</Text>
+                      {epg.remaining ? (
+                        <Text style={styles.osdRemaining}>{formatRemaining(epg.remaining)}</Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.osdProgram} numberOfLines={1}>
+                      {epg.current.title}
+                    </Text>
+                    <View style={styles.osdProgressBar}>
+                      <View style={[styles.osdProgressFill, { width: `${epg.progress}%` }]} />
+                    </View>
+                    {epg.next && (
+                      <Text style={styles.osdNext} numberOfLines={1}>
+                        A seguir: {epg.next.title}
+                      </Text>
+                    )}
+                  </View>
+                )}
               </View>
             </View>
           </View>
@@ -655,22 +701,55 @@ const styles = StyleSheet.create({
   nextContainer: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   nextLabel: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, fontWeight: '600' },
   nextProgram: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, flex: 1 },
-  // Channel OSD
+  // Channel OSD — redesigned with EPG support
   osdContainer: {
-    position: 'absolute', top: Spacing.xl, left: Spacing.xl, zIndex: 100,
+    position: 'absolute', bottom: Spacing.xl * 2, left: Spacing.xl,
+    right: '38%', zIndex: 100,
   },
   osdContent: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.85)', borderRadius: BorderRadius.lg,
-    padding: Spacing.lg, borderLeftWidth: 4, borderLeftColor: Colors.primary, gap: Spacing.lg,
+    flexDirection: 'row', alignItems: 'stretch',
+    backgroundColor: 'rgba(0,0,0,0.93)', borderRadius: BorderRadius.xl,
+    overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(99,102,241,0.4)',
+  },
+  osdLeft: {
+    width: 90, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    paddingVertical: Spacing.lg, gap: Spacing.xs,
+  },
+  osdNavArrow: {
+    color: 'rgba(255,255,255,0.35)', fontSize: 13, textAlign: 'center',
   },
   osdNumber: {
-    color: Colors.primary, fontSize: Typography.h1.fontSize, fontWeight: '700',
-    fontFamily: 'monospace', minWidth: 60, textAlign: 'center',
+    color: Colors.primary, fontSize: 34, fontWeight: '800',
+    fontFamily: 'monospace', textAlign: 'center',
   },
-  osdInfo: { flex: 1 },
-  osdName: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '600' },
+  osdInfo: { flex: 1, padding: Spacing.lg },
+  osdName: { color: Colors.text, fontSize: Typography.h3.fontSize, fontWeight: '700' },
   osdCategory: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginTop: 2 },
+  osdEpg: {
+    marginTop: Spacing.sm, borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: Spacing.sm,
+  },
+  osdLiveRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 4,
+  },
+  osdLiveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.live },
+  osdLiveText: {
+    color: Colors.live, fontSize: Typography.caption.fontSize,
+    fontWeight: '700', letterSpacing: 0.5, flex: 1, marginLeft: Spacing.xs,
+  },
+  osdRemaining: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize },
+  osdProgram: {
+    color: Colors.text, fontSize: Typography.body.fontSize,
+    fontWeight: '500', marginBottom: Spacing.xs,
+  },
+  osdProgressBar: {
+    height: 3, backgroundColor: Colors.progressBg,
+    borderRadius: 2, overflow: 'hidden', marginBottom: Spacing.xs,
+  },
+  osdProgressFill: { height: '100%', backgroundColor: Colors.primary },
+  osdNext: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize },
   // Menu Overlay
   menuOverlay: {
     ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 200,
