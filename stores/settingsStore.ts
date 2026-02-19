@@ -16,6 +16,7 @@ interface SettingsStore {
     // UI
     showChannelNumber: boolean;
     showEPG: boolean;
+    channelViewMode: 'grid' | 'list';
 
     // Ações
     setAdultPin: (pin: string) => void;
@@ -26,6 +27,7 @@ interface SettingsStore {
     setVolume: (value: number) => void;
     setShowChannelNumber: (value: boolean) => void;
     setShowEPG: (value: boolean) => void;
+    setChannelViewMode: (mode: 'grid' | 'list') => void;
     resetSettings: () => void;
 }
 
@@ -36,6 +38,7 @@ const initialState = {
     volume: 1,
     showChannelNumber: true,
     showEPG: false,
+    channelViewMode: 'grid' as 'grid' | 'list',
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -77,6 +80,10 @@ export const useSettingsStore = create<SettingsStore>()(
                 set({ showEPG: value });
             },
 
+            setChannelViewMode: (mode: 'grid' | 'list') => {
+                set({ channelViewMode: mode });
+            },
+
             resetSettings: () => {
                 set(initialState);
             },
@@ -91,6 +98,7 @@ export const useSettingsStore = create<SettingsStore>()(
                 volume: state.volume,
                 showChannelNumber: state.showChannelNumber,
                 showEPG: state.showEPG,
+                channelViewMode: state.channelViewMode,
             }),
         }
     )

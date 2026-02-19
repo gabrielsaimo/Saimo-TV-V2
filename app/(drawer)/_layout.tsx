@@ -52,7 +52,12 @@ export default function DrawerLayout() {
 
   return (
     <View style={styles.container}>
-      {/* Sidebar */}
+      {/* Main Content — margem fixa para o sidebar recolhido, sidebar sobrepõe ao expandir */}
+      <View style={[styles.content, { marginLeft: SIDEBAR_COLLAPSED }]}>
+        <Slot />
+      </View>
+
+      {/* Sidebar — posição absoluta para sobrepor o conteúdo ao expandir */}
       <Animated.View style={[styles.sidebar, { width: widthAnim }]}>
         {/* Logo */}
         <View style={styles.logoContainer}>
@@ -66,18 +71,13 @@ export default function DrawerLayout() {
         <View style={styles.navItems}>
           {NAV_ITEMS.map((item, index) => {
             const active = isActive(item.route);
-            // We need to track focus locally to change icon/text color to white when focused
-            // But since there are few items, we can't easily do it inside the map without extracting a component
-            // For now, let's rely on the background style change.
-            // Fix alignment: if collapsed, center the icon.
-            
             return (
               <TVPressable
                 key={item.route}
                 style={[
                   styles.navItem,
                   active && styles.navItemActive,
-                  !expanded && { justifyContent: 'center', paddingHorizontal: 0 } // Center when collapsed
+                  !expanded && { justifyContent: 'center', paddingHorizontal: 0 },
                 ]}
                 focusedStyle={styles.navItemFocused}
                 focusScale={1.05}
@@ -104,7 +104,7 @@ export default function DrawerLayout() {
                         style={[
                           styles.navLabel,
                           active && styles.navLabelActive,
-                          focused && { color: '#FFF' }
+                          focused && { color: '#FFF' },
                         ]}
                         numberOfLines={1}
                       >
@@ -125,11 +125,6 @@ export default function DrawerLayout() {
           )}
         </View>
       </Animated.View>
-
-      {/* Main Content */}
-      <View style={styles.content}>
-        <Slot />
-      </View>
     </View>
   );
 }
@@ -137,17 +132,21 @@ export default function DrawerLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'row',
     backgroundColor: Colors.background,
   },
   sidebar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
     backgroundColor: Colors.surface,
     borderRightWidth: 1,
     borderRightColor: Colors.border,
     paddingVertical: Spacing.lg,
     justifyContent: 'space-between',
     overflow: 'hidden',
-    zIndex: 100, // Ensure sidebar is above content for focus scaling
+    zIndex: 100,
+    elevation: 100,
   },
   logoContainer: {
     flexDirection: 'row',
@@ -202,6 +201,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    // marginLeft is set inline equal to SIDEBAR_COLLAPSED
   },
   versionContainer: {
     paddingHorizontal: Spacing.sm,

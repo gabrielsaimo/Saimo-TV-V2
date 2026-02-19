@@ -26,6 +26,7 @@ export default function SettingsScreen() {
     showChannelNumber, setShowChannelNumber,
     autoplay, setAutoplay,
     adultUnlocked, lockAdult, unlockAdult,
+    channelViewMode, setChannelViewMode,
   } = useSettingsStore();
 
   const { clearFavorites } = useFavoritesStore();
@@ -95,6 +96,28 @@ export default function SettingsScreen() {
             </View>
             <View style={[styles.toggle, autoplay && styles.toggleActive]}>
               <View style={[styles.toggleThumb, autoplay && styles.toggleThumbActive]} />
+            </View>
+          </TVPressable>
+          <View style={styles.divider} />
+          <TVPressable
+            style={styles.settingRow}
+            focusedStyle={styles.settingRowFocused}
+            focusScale={1.02}
+            onPress={() => setChannelViewMode(channelViewMode === 'grid' ? 'list' : 'grid')}
+          >
+            <View style={styles.settingInfo}>
+              <Ionicons
+                name={channelViewMode === 'grid' ? 'grid-outline' : 'list-outline'}
+                size={26}
+                color={Colors.primary}
+              />
+              <View>
+                <Text style={styles.settingLabel}>Exibição de Canais</Text>
+                <Text style={styles.settingHint}>{channelViewMode === 'grid' ? 'Cards' : 'Lista'}</Text>
+              </View>
+            </View>
+            <View style={[styles.toggle, channelViewMode === 'list' && styles.toggleActive]}>
+              <View style={[styles.toggleThumb, channelViewMode === 'list' && styles.toggleThumbActive]} />
             </View>
           </TVPressable>
         </View>
@@ -189,4 +212,5 @@ const styles = StyleSheet.create({
   appInfo: { alignItems: 'center', marginTop: Spacing.xxl, paddingVertical: Spacing.lg },
   appName: { color: Colors.text, fontSize: Typography.body.fontSize, fontWeight: '600' },
   appVersion: { color: Colors.textSecondary, fontSize: Typography.caption.fontSize, marginTop: Spacing.xs },
+  settingHint: { color: Colors.textSecondary, fontSize: Typography.label.fontSize, marginTop: 2 },
 });

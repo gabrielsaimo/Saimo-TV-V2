@@ -19,9 +19,11 @@ import { getCurrentProgram, fetchChannelEPG, onEPGUpdate, hasEPGMapping } from '
 
 interface TVChannelCardProps {
   channel: Channel;
+  cardWidth?: number;
+  onFocused?: (id: string) => void;
 }
 
-const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
+const TVChannelCard = memo(({ channel, cardWidth, onFocused }: TVChannelCardProps) => {
   const router = useRouter();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const showEPG = useSettingsStore(state => state.showEPG);
@@ -84,7 +86,8 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
   const handleFocus = useCallback(() => {
     setIsFocused(true);
     Animated.spring(scaleAnim, { toValue: 1.08, friction: 8, tension: 100, useNativeDriver: true }).start();
-  }, [scaleAnim]);
+    onFocused?.(channel.id);
+  }, [scaleAnim, onFocused, channel.id]);
 
   const handleBlur = useCallback(() => {
     setIsFocused(false);
@@ -99,7 +102,7 @@ const TVChannelCard = memo(({ channel }: TVChannelCardProps) => {
   return (
     <View style={styles.cardWrapper}>
     <Pressable onPress={handlePress} onLongPress={handleLongPress} onFocus={handleFocus} onBlur={handleBlur}>
-      <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }, isFocused && styles.containerFocused]}>
+      <Animated.View style={[styles.container, cardWidth ? { width: cardWidth } : null, { transform: [{ scale: scaleAnim }] }, isFocused && styles.containerFocused]}>
         <View style={styles.imageContainer}>
           {channel.logo ? (
             <Image source={{ uri: channel.logo }} style={styles.logo} contentFit="contain" cachePolicy="memory-disk" />
