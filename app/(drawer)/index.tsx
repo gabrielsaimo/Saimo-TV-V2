@@ -5,6 +5,8 @@ import {
   StyleSheet,
   FlatList,
   useWindowDimensions,
+  Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors, Typography, Spacing, BorderRadius, TV } from '../../constants/Colors';
@@ -41,38 +43,19 @@ export default function HomeScreen() {
     getFilteredChannels,
     getCategories,
     currentChannelId: lastWatchedId,
+    isProList,
+    setProList,
+    proChannels,
+    fetchProChannels,
+    isLoading,
   } = useChannelStore();
 
   const { favorites } = useFavoritesStore();
   const { adultUnlocked, channelViewMode } = useSettingsStore();
 
-  // ─── Lazy load de canais adultos ────────────────────────────────────────
-  // Canais normais: instantâneos. Adultos: carregados em batches p/ não travar.
-  const [loadedAdultCount, setLoadedAdultCount] = useState(0);
-
-  useEffect(() => {
-    if (!adultUnlocked) {
-      setLoadedAdultCount(0);
-      return;
-    }
-    const total = adultChannelsList.length;
-    if (total === 0) return;
-
-    // Primeiro batch imediatamente
-    setLoadedAdultCount(ADULT_BATCH);
-    if (total <= ADULT_BATCH) return;
-
-    // Batches subsequentes a cada 100ms
-    const interval = setInterval(() => {
-      setLoadedAdultCount(prev => {
-        const next = Math.min(prev + ADULT_BATCH, total);
-        if (next >= total) clearInterval(interval);
-        return next;
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [adultUnlocked]);
+  // ─── Progressive Loading ────────────────────────────────────────
+  // Canais são renderizados progressivamente para evitar travar o React Native na primeira renderização de 2000+ itens
+  const [displayLimit, setDisplayLimit] = useState(50);
 
   // Init EPG service once (loads disk cache quickly)
   useEffect(() => {
@@ -89,14 +72,25 @@ export default function HomeScreen() {
 
   const categories = getCategories(adultUnlocked);
 
+  const handleTogglePro = useCallback((val: boolean) => {
+    setProList(val);
+    setCategory('Todos');
+    setSearchQuery('');
+    if (val && proChannels.length === 0) {
+      fetchProChannels();
+    }
+  }, [setProList, setCategory, proChannels.length, fetchProChannels]);
+
   // Canais normais (instantâneos) com filtro de categoria
-  const regularChannels = getFilteredChannels(false, favorites);
+  // Se for lista PRO, já passamos 'adultUnlocked' direto, pois a store cuida do filtro de adultos.
+  // Se for lista NORMAL, passamos 'false' para carregar a parte adulta com lazy load separadamente.
+  const regularChannels = getFilteredChannels(isProList ? adultUnlocked : false, favorites);
 
-  // Combina canais normais + adultos carregados (com filtro de categoria)
+  // Combina canais normais + adultos (sem aplicar o slice de performance ainda)
   const allChannels = useMemo(() => {
-    if (!adultUnlocked || loadedAdultCount === 0) return regularChannels;
+    if (isProList) return regularChannels; // A store já cuida de tudo para a PRO
 
-    let adultSlice = adultChannelsList.slice(0, loadedAdultCount);
+    let adultSlice = adultUnlocked ? adultChannelsList : [];
 
     // Aplica filtro de categoria no slice adulto
     if (selectedCategory === 'Favoritos') {
@@ -105,13 +99,13 @@ export default function HomeScreen() {
       adultSlice = []; // categoria não-adulta selecionada → esconde adultos
     }
 
-    // Categoria "Adulto" → mostra só adultos
+    // Categoria "Adulto" → mostra só adultos da lista normal
     if (selectedCategory === 'Adulto') return adultSlice;
 
     return [...regularChannels, ...adultSlice];
-  }, [adultUnlocked, loadedAdultCount, regularChannels, selectedCategory, favorites]);
+  }, [isProList, regularChannels, adultUnlocked, selectedCategory, favorites]);
 
-  const channels = useMemo(() => {
+  const searchedChannels = useMemo(() => {
     if (!searchQuery.trim()) return allChannels;
     const query = searchQuery.toLowerCase().trim();
     return allChannels.filter(ch =>
@@ -120,9 +114,33 @@ export default function HomeScreen() {
     );
   }, [allChannels, searchQuery]);
 
-  // Ref dos canais para o useFocusEffect (evita closure velho)
-  const channelsRef = useRef(channels);
-  useEffect(() => { channelsRef.current = channels; }, [channels]);
+  // Efeito responsável por carregar a lista progressivamente evitando travamento no Native UI
+  useEffect(() => {
+    setDisplayLimit(50);
+    const total = searchedChannels.length;
+    if (total <= 50) return;
+
+    // Carrega blocos de 50 a cada 150ms no background
+    const interval = setInterval(() => {
+      setDisplayLimit(prev => {
+        const next = prev + 50;
+        if (next >= total) {
+          clearInterval(interval);
+          return total;
+        }
+        return next;
+      });
+    }, 150);
+
+    return () => clearInterval(interval);
+  }, [searchedChannels]);
+
+  // Slice final para o FlatList renderizar
+  const displayedChannels = useMemo(() => searchedChannels.slice(0, displayLimit), [searchedChannels, displayLimit]);
+
+  // Ref da base completa para focus effect (para o scrollHeight e ref de foco)
+  const channelsRef = useRef(searchedChannels);
+  useEffect(() => { channelsRef.current = searchedChannels; }, [searchedChannels]);
 
   // Ao retornar do player: scrolla para o último canal e ativa foco nativo nele
   useFocusEffect(useCallback(() => {
@@ -131,6 +149,10 @@ export default function HomeScreen() {
     setFocusTargetId(lastWatchedId);
     const idx = channelsRef.current.findIndex(ch => ch.id === lastWatchedId);
     if (idx < 0) return;
+    
+    // Garante que o displayLimit tenha chegado até esse item
+    setDisplayLimit(prev => Math.max(prev, idx + 10));
+
     const t = setTimeout(() => {
       flatListRef.current?.scrollToIndex({ index: idx, viewPosition: 0.5, animated: false });
     }, 150);
@@ -169,7 +191,25 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.subtitle}>{channels.length} canais</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.subtitle}>{searchedChannels.length} canais</Text>
+          <TVPressable 
+            style={styles.switchContainer} 
+            onPress={() => handleTogglePro(!isProList)}
+            focusScale={1.05}
+          >
+            <Text style={[styles.switchLabel, !isProList && styles.switchLabelActive]}>Normal</Text>
+            <View pointerEvents="none" style={{ marginHorizontal: -4 }}>
+              <Switch
+                value={isProList}
+                trackColor={{ false: Colors.surfaceVariant, true: Colors.primary }}
+                thumbColor={Colors.text}
+              />
+            </View>
+            <Text style={[styles.switchLabel, isProList && styles.switchLabelActive]}>Pro</Text>
+            {isLoading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />}
+          </TVPressable>
+        </View>
         {/* EPG loading badge — desaparece quando tudo estiver carregado */}
         {epgLoaded < TOTAL_EPG && (
           <View style={styles.epgBadge}>
@@ -221,7 +261,7 @@ export default function HomeScreen() {
       <FlatList
         ref={flatListRef}
         key={channelViewMode}
-        data={channels}
+        data={displayedChannels}
         keyExtractor={keyExtractor}
         numColumns={channelViewMode === 'grid' ? NUM_COLS : 1}
         renderItem={renderChannel}
@@ -233,15 +273,16 @@ export default function HomeScreen() {
         windowSize={8}
         removeClippedSubviews
         onScrollToIndexFailed={({ index }) => {
+          setDisplayLimit(prev => Math.max(prev, index + 20));
           setTimeout(() => {
             flatListRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false });
           }, 300);
         }}
         ListFooterComponent={
-          adultUnlocked && loadedAdultCount < adultChannelsList.length ? (
+          displayLimit < searchedChannels.length ? (
             <View style={styles.loadingFooter}>
               <Text style={styles.loadingFooterText}>
-                Carregando canais adultos… {loadedAdultCount}/{adultChannelsList.length}
+                Carregando canais… {Math.min(displayLimit, searchedChannels.length)}/{searchedChannels.length}
               </Text>
             </View>
           ) : null
@@ -267,6 +308,29 @@ const styles = StyleSheet.create({
   subtitle: {
     color: Colors.textSecondary,
     fontSize: Typography.caption.fontSize,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xl,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceVariant,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  switchLabel: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  switchLabelActive: {
+    color: Colors.primary,
+    fontWeight: 'bold',
   },
   epgBadge: {
     flexDirection: 'row',

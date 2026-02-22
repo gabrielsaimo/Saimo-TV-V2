@@ -8,12 +8,16 @@ interface ChannelStore {
     currentChannelId: string | null;
     searchQuery: string;
     isLoading: boolean;
+    isProList: boolean;
+    proChannels: Channel[];
 
     // Ações
     setCategory: (category: CategoryId | 'Todos' | 'Favoritos') => void;
     setCurrentChannel: (channelId: string | null) => void;
     setSearchQuery: (query: string) => void;
     setLoading: (loading: boolean) => void;
+    setProList: (isPro: boolean) => void;
+    fetchProChannels: () => Promise<void>;
 
     // Seletores
     getFilteredChannels: (includeAdult: boolean, favorites: string[]) => Channel[];
@@ -25,6 +29,8 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
     currentChannelId: null,
     searchQuery: '',
     isLoading: false,
+    isProList: false,
+    proChannels: [],
 
     setCategory: (category) => {
         set({ selectedCategory: category });
@@ -42,13 +48,36 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
         set({ isLoading: loading });
     },
 
+    setProList: (isPro) => {
+        set({ isProList: isPro });
+    },
+
+    fetchProChannels: async () => {
+        try {
+            set({ isLoading: true });
+            const res = await fetch('https://raw.githubusercontent.com/gabrielsaimo/Saimo-TV/main/public/data/lista_pro.json');
+            const data = await res.json();
+            set({ proChannels: data, isLoading: false });
+        } catch (error) {
+            console.error('Failed to fetch pro channels:', error);
+            set({ isLoading: false });
+        }
+    },
+
     getFilteredChannels: (includeAdult: boolean, favorites: string[]) => {
-        const { selectedCategory, searchQuery } = get();
+        const { selectedCategory, searchQuery, isProList, proChannels } = get();
 
         // Base de canais
-        let allChs = includeAdult
-            ? [...channels, ...adultChannels]
-            : channels;
+        let allChs: Channel[] = [];
+        if (isProList) {
+            allChs = includeAdult
+                ? proChannels
+                : proChannels.filter(ch => ch.category !== 'ADULTOS' && ch.category !== 'Adulto');
+        } else {
+            allChs = includeAdult
+                ? [...channels, ...adultChannels]
+                : channels;
+        }
 
         // Filtro por categoria
         if (selectedCategory === 'Favoritos') {
@@ -70,6 +99,14 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
     },
 
     getCategories: (includeAdult: boolean) => {
+        const { isProList, proChannels } = get();
+
+        if (isProList) {
+            const cats = Array.from(new Set(proChannels.map(ch => ch.category)));
+            const filteredCats = includeAdult ? cats : cats.filter(c => c !== 'ADULTOS' && c !== 'Adulto');
+            return ['Todos', 'Favoritos', ...filteredCats];
+        }
+
         if (includeAdult) {
             return ['Todos', 'Favoritos', ...categoryOrder];
         }

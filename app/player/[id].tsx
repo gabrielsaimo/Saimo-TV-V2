@@ -26,13 +26,22 @@ import EPGGuide from '../../components/EPGGuide';
 export default function TVPlayerScreen() {
   const { id: initialId } = useLocalSearchParams<{ id: string }>();
   const [currentChannelId, setCurrentChannelId] = useState(initialId);
-  const channel = getChannelById(currentChannelId);
   const router = useRouter();
 
   const { adultUnlocked } = useSettingsStore();
-  const setCurrentChannel = useChannelStore(state => state.setCurrentChannel);
+  const { setCurrentChannel, isProList, proChannels } = useChannelStore();
 
-  const allChannelsList = useMemo(() => getAllChannels(adultUnlocked), [adultUnlocked]);
+  // Combine channels dynamically based on the current active list
+  const allChannelsList = useMemo(() => {
+    if (isProList) {
+      return adultUnlocked 
+        ? proChannels 
+        : proChannels.filter(c => c.category !== 'ADULTOS' && c.category !== 'Adulto');
+    }
+    return getAllChannels(adultUnlocked);
+  }, [adultUnlocked, isProList, proChannels]);
+
+  const channel = useMemo(() => allChannelsList.find(c => c.id === currentChannelId), [allChannelsList, currentChannelId]);
 
   // ─── Video player ──────────────────────────────────────────────────────
   // Fonte nula: garante que o player NUNCA muda de referência entre trocas de canal.
