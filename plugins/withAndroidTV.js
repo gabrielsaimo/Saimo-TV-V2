@@ -76,6 +76,10 @@ module.exports = function withAndroidTV(config) {
 
       // Set screen orientation to landscape
       mainActivity.$['android:screenOrientation'] = 'landscape';
+
+      // Prevent Activity recreation on these config changes (keeps video playing)
+      mainActivity.$['android:configChanges'] =
+        'keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize';
     }
 
     return config;

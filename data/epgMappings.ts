@@ -98,6 +98,12 @@ export const meuguiaChannelCodes: Record<string, string> = {
     'dw-english':        'DWL',
 };
 
+// Slugs para tvplus.com.br  (URL: https://www.tvplus.com.br/programacao/{slug})
+export const tvplusChannelSlugs: Record<string, string> = {
+    'adult-swim': 'adult-swim',
+    'curta':      'curta',
+};
+
 // Slugs para guiadetv.com  (URL: https://www.guiadetv.com/canal/{slug})
 export const guiadetvChannelSlugs: Record<string, string> = {
     // ── Originais (já existiam) ────────────────────────────────────────────────
@@ -138,16 +144,28 @@ export const guiadetvChannelSlugs: Record<string, string> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Total de canais que têm mapeamento EPG em qualquer fonte */
+export const getTotalEPGChannels = (): number =>
+    Object.keys(meuguiaChannelCodes).length +
+    Object.keys(guiadetvChannelSlugs).length +
+    Object.keys(tvplusChannelSlugs).length;
+
+export const usesTVPlus = (channelId: string): boolean =>
+    channelId in tvplusChannelSlugs;
+
 export const usesGuiaDeTV = (channelId: string): boolean =>
     channelId in guiadetvChannelSlugs;
 
 export const getEPGCode = (channelId: string): string | null => {
+    if (channelId in tvplusChannelSlugs)   return tvplusChannelSlugs[channelId];
     if (channelId in guiadetvChannelSlugs) return guiadetvChannelSlugs[channelId];
     if (channelId in meuguiaChannelCodes)  return meuguiaChannelCodes[channelId];
     return null;
 };
 
 export const getEPGUrl = (channelId: string): string | null => {
+    if (channelId in tvplusChannelSlugs)
+        return `https://www.tvplus.com.br/programacao/${tvplusChannelSlugs[channelId]}`;
     if (channelId in guiadetvChannelSlugs)
         return `https://www.guiadetv.com/canal/${guiadetvChannelSlugs[channelId]}`;
     if (channelId in meuguiaChannelCodes)

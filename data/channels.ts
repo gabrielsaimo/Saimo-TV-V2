@@ -23,7 +23,6 @@ const rawChannels = [
     { id: 'cinemax', name: 'Cinemax', url: 'https://canais.fazoeli.co.za/fontes/smart/cinemax.m3u8', category: 'Filmes', logo: `${LOGO_BASE}/cinemax-br.png` },
     { id: 'megapix', name: 'Megapix', url: 'https://canais.fazoeli.co.za/fontes/smart/megapix.m3u8', category: 'Filmes', logo: `${LOGO_BASE}/megapix-br.png` },
     { id: 'studio-universal', name: 'Studio Universal', url: 'https://canais.fazoeli.co.za/fontes/smart/studiouniversal.m3u8', category: 'Filmes', logo: `${LOGO_BASE}/studio-universal-br.png` },
-    { id: 'curta', name: 'Curta!', url: 'https://canais.fazoeli.co.za/fontes/smart/curta.m3u8', category: 'Filmes', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Logo_of_Curta%21.svg/960px-Logo_of_Curta%21.svg.png' },
     { id: 'telecine-fun', name: 'Telecine Fun', url: 'https://canais.fazoeli.co.za/fontes/smart/telecinefun.m3u8', category: 'Filmes', logo: `${LOGO_BASE}/tele-cine-fun-br.png` },
     { id: 'telecine-touch', name: 'Telecine Touch', url: 'https://canais.fazoeli.co.za/fontes/smart/telecinetouch.m3u8', category: 'Filmes', logo: `${LOGO_BASE}/tele-cine-touch-br.png` },
     { id: 'telecine-cult', name: 'Telecine Cult', url: 'https://canais.fazoeli.co.za/fontes/smart/telecinecult.m3u8', category: 'Filmes', logo: `${LOGO_BASE}/tele-cine-cult-br.png` },
@@ -57,6 +56,7 @@ const rawChannels = [
 
     // === DOCUMENTARIOS ===
     { id: 'discovery', name: 'Discovery Channel', url: 'https://canais.fazoeli.co.za/fontes/smart/discoverychannel.m3u8', category: 'Documentarios', logo: `${LOGO_US}/discovery-channel-us.png` },
+    { id: 'curta', name: 'Curta!', url: 'https://canais.fazoeli.co.za/fontes/smart/curta.m3u8', category: 'Documentarios', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Logo_of_Curta%21.svg/960px-Logo_of_Curta%21.svg.png' },
     { id: 'animal-planet', name: 'Animal Planet', url: 'https://canais.fazoeli.co.za/fontes/smart/animalplanet.m3u8', category: 'Documentarios', logo: `${LOGO_INTL}/animal-planet-int.png` },
     { id: 'history', name: 'History', url: 'https://canais.fazoeli.co.za/fontes/smart/history.m3u8', category: 'Documentarios', logo: `${LOGO_LAM}/history-channel-lam.png` },
     { id: 'history2', name: 'History 2', url: 'https://canais.fazoeli.co.za/fontes/smart/history2.m3u8', category: 'Documentarios', logo: `${LOGO_LAM}/history-channel-2-lam.png` },
@@ -66,7 +66,7 @@ const rawChannels = [
     { id: 'discovery-hh', name: 'Discovery H&H', url: 'https://canais.fazoeli.co.za/fontes/smart/discoveryhh.m3u8', category: 'Documentarios', logo: `${LOGO_LAM}/discovery-home-and-health-lam.png` },
     { id: 'discovery-id', name: 'Investigation Discovery', url: 'https://canais.fazoeli.co.za/fontes/smart/discoveryid.m3u8', category: 'Documentarios', logo: `${LOGO_INTL}/investigation-discovery-int.png` },
     { id: 'discovery-science', name: 'Discovery Science', url: 'https://canais.fazoeli.co.za/fontes/smart/discoveryscience.m3u8', category: 'Documentarios', logo: `${LOGO_US}/discovery-science-us.png` },
-    { id: 'discovery-world', name: 'Discovery World', url: 'https://canais.fazoeli.co.za/fontes/smart/discoveryworld.m3u8', category: 'Documentarios', logo: `${LOGO_US}/discovery-history-us.png` },
+    { id: 'discovery-world', name: 'Discovery World', url: 'https://canais.fazoeli.co.za/fontes/smart/discoveryworld.m3u8', category: 'Documentarios', logo: `${LOGO_US}/discovery-world-us.png` },
     { id: 'discovery-turbo', name: 'Discovery Turbo', url: 'https://canais.fazoeli.co.za/fontes/smart/discoveryturbo.m3u8', category: 'Documentarios', logo: `${LOGO_BASE}/discovery-turbo-br.png` },
 
     // === ENTRETENIMENTO ===
@@ -79,7 +79,6 @@ const rawChannels = [
     { id: 'bbb7', name: 'BBB CAN 7', url: 'https://canais.fazoeli.co.za/fontes/smart/bbb7.m3u8', category: 'Entretenimento', logo: `http://channelart.8b90287dn2.online/images/logos/bbbrasil.png` },
     { id: 'bbb8', name: 'BBB CAN 8', url: 'https://canais.fazoeli.co.za/fontes/smart/bbb8.m3u8', category: 'Entretenimento', logo: `http://channelart.8b90287dn2.online/images/logos/bbbrasil.png` },
     { id: 'bbb9', name: 'BBB CAN 9', url: 'https://canais.fazoeli.co.za/fontes/smart/bbb9.m3u8', category: 'Entretenimento', logo: `http://channelart.8b90287dn2.online/images/logos/bbbrasil.png` },
-    { id: 'bbb10', name: 'BBB CAN 10', url: 'https://canais.fazoeli.co.za/fontes/smart/bbb10.m3u8', category: 'Entretenimento', logo: `http://channelart.8b90287dn2.online/images/logos/bbbrasil.png` },
     { id: 'multishow', name: 'Multishow', url: 'https://canais.fazoeli.co.za/fontes/smart/multishow.m3u8', category: 'Entretenimento', logo: `${LOGO_BASE}/multishow-br.png` },
     { id: 'bis', name: 'BIS', url: 'https://canais.fazoeli.co.za/fontes/smart/bis.m3u8', category: 'Entretenimento', logo: `${LOGO_BASE}/bis-br.png` },
     { id: 'viva', name: 'Viva', url: 'https://canais.fazoeli.co.za/fontes/smart/viva.m3u8', category: 'Entretenimento', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Canal_Viva_2018_wordmark.svg/960px-Canal_Viva_2018_wordmark.svg.png' },
@@ -88,7 +87,6 @@ const rawChannels = [
     { id: 'arte1', name: 'Arte 1', url: 'https://canais.fazoeli.co.za/fontes/smart/arte1.m3u8', category: 'Entretenimento', logo: `${LOGO_BASE}/arte1-br.png` },
     { id: 'cultura', name: 'TV Cultura', url: 'https://canais.fazoeli.co.za/fontes/smart/cultura.m3u8', category: 'Entretenimento', logo: `${LOGO_BASE}/tv-cultura-br.png` },
     { id: 'loading-tv', name: 'Loading', url: 'https://stmv1.srvif.com/loadingtv/loadingtv/playlist.m3u8', category: 'Entretenimento', logo: 'https://i.imgur.com/R0aflu1.png' },
-    { id: 'mytime-movie', name: 'MyTime Movie', url: 'https://appletree-mytime-samsungbrazil.amagi.tv/playlist.m3u8', category: 'Entretenimento', logo: 'https://i.imgur.com/aiGQtzI.png' },
     { id: 'classique-tv', name: 'Classique TV', url: 'https://stmv1.srvif.com/classique/classique/playlist.m3u8', category: 'Entretenimento', logo: 'https://i.imgur.com/rHxcraT.png' },
     { id: 'gospel-movie-tv', name: 'Gospel Movie TV', url: 'https://stmv1.srvif.com/gospelf/gospelf/playlist.m3u8', category: 'Entretenimento', logo: 'https://i.imgur.com/cQN3nWt.png' },
 
@@ -119,9 +117,9 @@ const rawChannels = [
     { id: 'sertao-tv', name: 'Sertão TV', url: 'http://wz4.dnip.com.br/sertaotv/sertaotv.sdp/playlist.m3u8', category: 'TV Aberta', logo: 'https://i.imgur.com/b5xOCsC.png' },
     { id: 'cwb-tv', name: 'CWB TV', url: 'https://59d39900ebfb8.streamlock.net/cwbtv/cwbtv/playlist.m3u8', category: 'TV Aberta', logo: 'https://i.imgur.com/S0ISpmU.png' },
     { id: 'record-internacional', name: 'Record Internacional', url: 'https://viamotionhsi.netplus.ch/live/eds/rederecordinternacional/browser-HLS8/rederecordinternacional.m3u8', category: 'TV Aberta', logo: 'https://i.imgur.com/sz9gTTr.png' },
-    { id: 'novo-tempo', name: 'TV Novo Tempo', url: 'https://stream.live.novotempo.com/tv/smil:tvnovotempo.smil/playlist.m3u8', category: 'TV Aberta', logo: 'https://www.google.com/url?sa=t&source=web&rct=j&url=https%3A%2F%2Fpt.wikipedia.org%2Fwiki%2FFicheiro%3ALogo_2015_-_TV_Novo_Tempo.png&ved=0CBYQjRxqFwoTCPjA0OjA5ZIDFQAAAAAdAAAAABAH&opi=89978449https://upload.wikimedia.org/wikipedia/pt/0/07/Logo_2015_-_TV_Novo_Tempo.png?20160220132140https://upload.wikimedia.org/wikipedia/pt/0/07/Logo_2015_-_TV_Novo_Tempo.png' },
+    { id: 'novo-tempo', name: 'TV Novo Tempo', url: 'https://stream.live.novotempo.com/tv/smil:tvnovotempo.smil/playlist.m3u8', category: 'TV Aberta', logo: 'https://upload.wikimedia.org/wikipedia/pt/0/07/Logo_2015_-_TV_Novo_Tempo.png?20160220132140' },
     { id: 'rede-gospel', name: 'Rede Gospel', url: 'https://redegospel-aovivo.nuvemplay.live/hls/stream.m3u8', category: 'TV Aberta', logo: 'https://i.imgur.com/mttSwgO.png' },
-    { id: 'despertar-tv', name: 'Despertar TV', url: 'https://cdn.live.br1.jmvstream.com/webtv/pejexypz/playlist/playlist.m3u8', category: 'TV Aberta', logo: getFallbackLogo('Despertar') },
+    { id: 'despertar-tv', name: 'Despertar TV', url: 'https://cdn.live.br1.jmvstream.com/webtv/pejexypz/playlist/playlist.m3u8', category: 'TV Aberta', logo: 'https://res.cloudinary.com/dpkehkbpv/image/upload/v1721839192/logo/mixtv/despertar_tv_ieb2l3.png' },
 
     // === ESPORTES ===
     { id: 'sportv', name: 'SporTV', url: 'https://canais.fazoeli.co.za/fontes/smart/sportv.m3u8', category: 'Esportes', logo: `${LOGO_BASE}/sportv-br.png` },
@@ -157,7 +155,8 @@ const rawChannels = [
     { id: 'movie-channel', name: 'The Movie Channel', url: 'https://streams2.sofast.tv/sofastplayout/32eb332e-f644-46e5-ad91-e55ad80d14f7_0_HLS/master.m3u8', category: 'Internacionais', logo: getFallbackLogo('Movie') },
     { id: 'kuriakos-kids', name: 'Kuriakos Kids', url: 'https://w2.manasat.com/kkids/smil:kkids.smil/playlist.m3u8', category: 'Internacionais', logo: 'https://i.imgur.com/SRX6EPY.png' },
     { id: 'angel-tv', name: 'Angel TV', url: 'https://janya-digimix.akamaized.net/vglive-sk-382409/portuese/ngrp:angelportuguese_all/playlist.m3u8', category: 'Internacionais', logo: 'https://i.imgur.com/qKLEGU7.png' },
-
+    { id: 'mytime-movie', name: 'MyTime Movie', url: 'https://appletree-mytime-samsungbrazil.amagi.tv/playlist.m3u8', category: 'Internacionais', logo: 'https://i.imgur.com/aiGQtzI.png' },
+ 
     // === ADULTO ===
     { id: 'playboy', name: 'Playboy TV', url: 'https://canais.fazoeli.co.za/fontes/smart/playboy.m3u8', category: 'Adulto', logo: 'http://channelart.8b90287dn2.online/images/logos/Canal%20Adulto.png' },
     { id: 'sexy-hot', name: 'Sexy Hot', url: 'https://canais.fazoeli.co.za/fontes/smart/sexyhot.m3u8', category: 'Adulto', logo: 'http://channelart.8b90287dn2.online/images/logos/Canal%20Adulto.png' },

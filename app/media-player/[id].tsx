@@ -81,6 +81,7 @@ export default function TVMediaPlayerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState(true);
+  const isPlayingRef = useRef(true);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -115,13 +116,9 @@ export default function TVMediaPlayerScreen() {
     const seasonEps = episodes[currentSeason];
     if (!seasonEps) return null;
 
-    // Try next episode in same season
     const nextEpInSeason = seasonEps.find(ep => ep.episode === currentEpisode + 1);
-    if (nextEpInSeason) {
-      return { episode: nextEpInSeason, season: currentSeason };
-    }
+    if (nextEpInSeason) return { episode: nextEpInSeason, season: currentSeason };
 
-    // Try first episode of next season
     const seasons = Object.keys(episodes).sort((a, b) => parseInt(a) - parseInt(b));
     const currentSeasonIndex = seasons.indexOf(currentSeason);
     if (currentSeasonIndex >= 0 && currentSeasonIndex < seasons.length - 1) {
@@ -131,7 +128,6 @@ export default function TVMediaPlayerScreen() {
         return { episode: nextSeasonEps[0], season: nextSeasonKey };
       }
     }
-
     return null;
   }, [seriesContext]);
 
@@ -139,7 +135,6 @@ export default function TVMediaPlayerScreen() {
     if (!nextEpisode || !seriesContext) return;
     const { episode: ep, season } = nextEpisode;
     setSeriesProgress(seriesContext.seriesId, parseInt(season), ep.episode, ep.id);
-
     router.replace({
       pathname: '/media-player/[id]' as any,
       params: {
@@ -211,6 +206,7 @@ export default function TVMediaPlayerScreen() {
 
     subs.push(player.addListener('playingChange', (payload) => {
       if (!isMountedRef.current) return;
+      isPlayingRef.current = payload.isPlaying;
       setIsPlaying(payload.isPlaying);
     }));
 
@@ -224,20 +220,25 @@ export default function TVMediaPlayerScreen() {
   }, [player]);
 
   // Controls auto-hide timer
+  // resetHideTimer tem referência estável (sem deps de estado) para não
+  // resetar o timer a cada mudança de isPlaying (ex: buffering).
+  // Usa isPlayingRef.current no callback para pegar o valor mais recente.
   const resetHideTimer = useCallback(() => {
     if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
     setShowControls(true);
     hideControlsTimer.current = setTimeout(() => {
-      if (isPlaying) setShowControls(false);
+      if (isPlayingRef.current) setShowControls(false);
     }, 5000);
-  }, [isPlaying]);
+  }, []); // sem deps — referência estável
 
+  // Inicia o timer uma única vez no mount
   useEffect(() => {
     resetHideTimer();
     return () => {
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
     };
-  }, [resetHideTimer]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const handleClose = useCallback(async () => {
     isMountedRef.current = false;
@@ -294,17 +295,14 @@ export default function TVMediaPlayerScreen() {
     (event) => {
       if (showControls) {
         // Controls visible → passthrough mode handles D-pad focus navigation
-        // Only intercept specific keys that should trigger actions
         switch (event.eventType) {
           case 'playPause':
             togglePlayPause();
             break;
           case 'down':
-            // If user presses down while controls are visible, hide them
             setShowControls(false);
             break;
           case 'menu':
-            // Do nothing
             break;
         }
         return;
@@ -331,7 +329,6 @@ export default function TVMediaPlayerScreen() {
           resetHideTimer();
           break;
         case 'menu':
-          // Explicitly do nothing as per requirements
           break;
       }
     },

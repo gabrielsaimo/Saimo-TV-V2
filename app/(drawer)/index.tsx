@@ -12,7 +12,9 @@ import TVPressable from '../../components/TVPressable';
 import { useChannelStore } from '../../stores/channelStore';
 import { useFavoritesStore } from '../../stores/favoritesStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { initEPGService } from '../../services/epgService';
+import { initEPGService, onEPGProgress, getEPGLoadedCount } from '../../services/epgService';
+import { getTotalEPGChannels } from '../../data/epgMappings';
+import { adultChannels as adultChannelsList } from '../../data/channels';
 import type { Channel } from '../../types';
 import TVChannelCard from '../../components/TVChannelCard';
 import TVChannelListItem from '../../components/TVChannelListItem';
@@ -23,11 +25,14 @@ const COL_GAP = Spacing.lg;
 const SCALE_PAD = 6;
 // Largura recolhida do sidebar (deve ser igual ao SIDEBAR_COLLAPSED em _layout.tsx)
 const SIDEBAR_COLLAPSED_W = TV.sidebarCollapsedWidth + 20;
+// Quantos canais adultos adicionar por tick (lazy load)
+const ADULT_BATCH = 50;
 
 export default function HomeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
+  const [focusTargetId, setFocusTargetId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const {
@@ -41,13 +46,70 @@ export default function HomeScreen() {
   const { favorites } = useFavoritesStore();
   const { adultUnlocked, channelViewMode } = useSettingsStore();
 
+  // ─── Lazy load de canais adultos ────────────────────────────────────────
+  // Canais normais: instantâneos. Adultos: carregados em batches p/ não travar.
+  const [loadedAdultCount, setLoadedAdultCount] = useState(0);
+
+  useEffect(() => {
+    if (!adultUnlocked) {
+      setLoadedAdultCount(0);
+      return;
+    }
+    const total = adultChannelsList.length;
+    if (total === 0) return;
+
+    // Primeiro batch imediatamente
+    setLoadedAdultCount(ADULT_BATCH);
+    if (total <= ADULT_BATCH) return;
+
+    // Batches subsequentes a cada 100ms
+    const interval = setInterval(() => {
+      setLoadedAdultCount(prev => {
+        const next = Math.min(prev + ADULT_BATCH, total);
+        if (next >= total) clearInterval(interval);
+        return next;
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [adultUnlocked]);
+
   // Init EPG service once (loads disk cache quickly)
   useEffect(() => {
     initEPGService();
   }, []);
 
+  // ─── EPG loading progress ─────────────────────────────────────────────
+  const TOTAL_EPG = getTotalEPGChannels();
+  const [epgLoaded, setEpgLoaded] = useState(getEPGLoadedCount);
+  useEffect(() => {
+    const unsub = onEPGProgress(setEpgLoaded);
+    return unsub;
+  }, []);
+
   const categories = getCategories(adultUnlocked);
-  const allChannels = getFilteredChannels(adultUnlocked, favorites);
+
+  // Canais normais (instantâneos) com filtro de categoria
+  const regularChannels = getFilteredChannels(false, favorites);
+
+  // Combina canais normais + adultos carregados (com filtro de categoria)
+  const allChannels = useMemo(() => {
+    if (!adultUnlocked || loadedAdultCount === 0) return regularChannels;
+
+    let adultSlice = adultChannelsList.slice(0, loadedAdultCount);
+
+    // Aplica filtro de categoria no slice adulto
+    if (selectedCategory === 'Favoritos') {
+      adultSlice = adultSlice.filter(ch => favorites.includes(ch.id));
+    } else if (selectedCategory !== 'Todos' && selectedCategory !== 'Adulto') {
+      adultSlice = []; // categoria não-adulta selecionada → esconde adultos
+    }
+
+    // Categoria "Adulto" → mostra só adultos
+    if (selectedCategory === 'Adulto') return adultSlice;
+
+    return [...regularChannels, ...adultSlice];
+  }, [adultUnlocked, loadedAdultCount, regularChannels, selectedCategory, favorites]);
 
   const channels = useMemo(() => {
     if (!searchQuery.trim()) return allChannels;
@@ -62,9 +124,11 @@ export default function HomeScreen() {
   const channelsRef = useRef(channels);
   useEffect(() => { channelsRef.current = channels; }, [channels]);
 
-  // Ao retornar do player, scrolla para o último canal assistido
+  // Ao retornar do player: scrolla para o último canal e ativa foco nativo nele
   useFocusEffect(useCallback(() => {
     if (!lastWatchedId) return;
+    // Snapshot do id no momento do foco (não muda enquanto o usuário está no player)
+    setFocusTargetId(lastWatchedId);
     const idx = channelsRef.current.findIndex(ch => ch.id === lastWatchedId);
     if (idx < 0) return;
     const t = setTimeout(() => {
@@ -90,16 +154,36 @@ export default function HomeScreen() {
     if (channelViewMode === 'list') {
       return <TVChannelListItem channel={item} />;
     }
-    return <TVChannelCard channel={item} cardWidth={cardWidth} />;
-  }, [channelViewMode, cardWidth]);
+    return (
+      <TVChannelCard
+        channel={item}
+        cardWidth={cardWidth}
+        hasTVPreferredFocus={item.id === focusTargetId}
+      />
+    );
+  }, [channelViewMode, cardWidth, focusTargetId]);
 
   const keyExtractor = useCallback((item: Channel) => item.id, []);
 
   return (
     <View style={styles.container}>
-      {/* Header — título removido para ganhar espaço */}
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.subtitle}>{channels.length} canais</Text>
+        {/* EPG loading badge — desaparece quando tudo estiver carregado */}
+        {epgLoaded < TOTAL_EPG && (
+          <View style={styles.epgBadge}>
+            <View style={styles.epgDot} />
+            <Text style={styles.epgBadgeText}>
+              EPG {epgLoaded}/{TOTAL_EPG}
+            </Text>
+          </View>
+        )}
+        {epgLoaded >= TOTAL_EPG && TOTAL_EPG > 0 && (
+          <View style={[styles.epgBadge, styles.epgBadgeDone]}>
+            <Text style={styles.epgBadgeDoneText}>EPG ✓</Text>
+          </View>
+        )}
       </View>
 
       {/* Category Bar */}
@@ -149,11 +233,19 @@ export default function HomeScreen() {
         windowSize={8}
         removeClippedSubviews
         onScrollToIndexFailed={({ index }) => {
-          // Fallback apenas para o scroll de retorno do player
           setTimeout(() => {
             flatListRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false });
           }, 300);
         }}
+        ListFooterComponent={
+          adultUnlocked && loadedAdultCount < adultChannelsList.length ? (
+            <View style={styles.loadingFooter}>
+              <Text style={styles.loadingFooterText}>
+                Carregando canais adultos… {loadedAdultCount}/{adultChannelsList.length}
+              </Text>
+            </View>
+          ) : null
+        }
       />
     </View>
   );
@@ -165,6 +257,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
@@ -172,6 +267,37 @@ const styles = StyleSheet.create({
   subtitle: {
     color: Colors.textSecondary,
     fontSize: Typography.caption.fontSize,
+  },
+  epgBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.35)',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  epgDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.warning,
+  },
+  epgBadgeText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  epgBadgeDone: {
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderColor: 'rgba(16,185,129,0.3)',
+  },
+  epgBadgeDoneText: {
+    color: Colors.success,
+    fontSize: 13,
+    fontWeight: '600',
   },
   categoryBar: {
     paddingBottom: Spacing.md,
@@ -214,5 +340,13 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.lg,
+  },
+  loadingFooter: {
+    paddingVertical: Spacing.lg,
+    alignItems: 'center',
+  },
+  loadingFooterText: {
+    color: Colors.textMuted,
+    fontSize: Typography.caption.fontSize,
   },
 });

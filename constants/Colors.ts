@@ -176,9 +176,10 @@ const MEDIA_CARD_TOTAL_W = MEDIA_CARD_W + 40;
 const mediaCols = Math.max(2, Math.floor((CONTENT_WIDTH - Spacing.xl * 2) / (MEDIA_CARD_TOTAL_W + Spacing.md)));
 
 export const TV = {
-  // Sidebar width
-  sidebarWidth: scale(280),
-  sidebarCollapsedWidth: scale(80),
+  // Sidebar width — Math.max garante mínimo absoluto independente da resolução
+  // (scale(280) em 720p dá ~187px, insuficiente para os labels de nav)
+  sidebarWidth: Math.max(260, scale(280)),
+  sidebarCollapsedWidth: Math.max(72, scale(80)),
 
   // Card sizes for TV — scale with resolution
   channelCardWidth: CHANNEL_CARD_W,

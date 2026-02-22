@@ -3,7 +3,7 @@
 // Per-file disk cache via expo-file-system v19 (sync API)
 
 import type { Program, CurrentProgram } from '../types';
-import { getEPGUrl, usesGuiaDeTV } from '../data/epgMappings';
+import { getEPGUrl, usesGuiaDeTV, usesTVPlus } from '../data/epgMappings';
 import { Paths, File as FSFile, Directory } from 'expo-file-system';
 
 // ===== CONSTANTES =====
@@ -26,9 +26,21 @@ const lastFetch = new Map<string, number>();
 const pendingFetches = new Map<string, Promise<Program[]>>();
 let currentProxyIndex = 0;
 
-// Listeners para atualizações
+// Listeners para atualizações por canal
 type EPGListener = (channelId: string, programs: Program[]) => void;
 const listeners = new Set<EPGListener>();
+
+// Tracking de progresso de carregamento
+type EPGProgressListener = (loaded: number) => void;
+const progressListeners = new Set<EPGProgressListener>();
+const loadedChannelIds   = new Set<string>(); // canais que já têm EPG disponível
+
+function emitProgress(channelId: string): void {
+    if (loadedChannelIds.has(channelId)) return; // já contado
+    loadedChannelIds.add(channelId);
+    const count = loadedChannelIds.size;
+    progressListeners.forEach(l => l(count));
+}
 
 // ===== CACHE EM DISCO (expo-file-system v19 — sync per-file) =====
 
@@ -265,12 +277,52 @@ function parseGuiadetvPrograms(html: string, channelId: string): Program[] {
     return programs;
 }
 
+function parseTVPlusPrograms(html: string, channelId: string): Program[] {
+    const programs: Program[] = [];
+
+    // Each program entry: <a href="/sinopse/ID/CH/HHhMM/YYYY-MM-DD/slug">Title</a>
+    // followed nearby by: HHhMM - HHhMM | Category
+    const pattern = /href="\/sinopse\/\d+\/[A-Z0-9]+\/\d{1,2}h\d{2}\/(\d{4}-\d{2}-\d{2})\/[^"]*"[^>]*>([\s\S]*?)<\/a>[\s\S]{0,400}?(\d{1,2})h(\d{2})\s*-\s*(\d{1,2})h(\d{2})\s*\|/gi;
+
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+        const dateStr   = match[1]; // "2026-02-19"
+        const rawTitle  = match[2].replace(/<[^>]+>/g, '').trim();
+        const startHour = parseInt(match[3], 10);
+        const startMin  = parseInt(match[4], 10);
+        const endHour   = parseInt(match[5], 10);
+        const endMin    = parseInt(match[6], 10);
+
+        if (!rawTitle) continue;
+
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const startTime = new Date(year, month - 1, day, startHour, startMin, 0, 0);
+        let endTime     = new Date(year, month - 1, day, endHour,   endMin,   0, 0);
+
+        // End time past midnight rolls into the next day
+        if (endTime <= startTime) {
+            endTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000);
+        }
+
+        programs.push({
+            id:          `${channelId}-${startTime.getTime()}`,
+            title:       decodeHTMLEntities(rawTitle),
+            description: '',
+            startTime,
+            endTime,
+        });
+    }
+
+    programs.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    return programs;
+}
+
 // ===== FETCH COM FALLBACK =====
 
 async function fetchWithProxyFallback(
     url: string,
     channelId: string,
-    source: 'meuguia' | 'guiadetv'
+    source: 'meuguia' | 'guiadetv' | 'tvplus'
 ): Promise<string | null> {
     for (let i = 0; i < CORS_PROXIES.length; i++) {
         const proxyIndex = (currentProxyIndex + i) % CORS_PROXIES.length;
@@ -283,7 +335,11 @@ async function fetchWithProxyFallback(
                 const html = await response.text();
 
                 let isValidHtml = false;
-                if (source === 'guiadetv') {
+                if (source === 'tvplus') {
+                    isValidHtml = html.length > 1000 &&
+                        html.includes('/sinopse/') &&
+                        /\d{1,2}h\d{2}/.test(html);
+                } else if (source === 'guiadetv') {
                     isValidHtml = html.length > 1000 &&
                         (html.includes('data-dt=') || html.includes('/programa/'));
                 } else {
@@ -338,6 +394,7 @@ export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
                 const memPrograms = disk.programs.filter(p => p.startTime < tomorrow);
                 memoryCache.set(channelId, memPrograms);
                 lastFetch.set(channelId, disk.fetchTime);
+                emitProgress(channelId);
                 return memPrograms;
             }
         }
@@ -354,7 +411,9 @@ export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
         const url = getEPGUrl(channelId);
         if (!url) return cached || [];
 
-        const source = usesGuiaDeTV(channelId) ? 'guiadetv' : 'meuguia';
+        const source = usesTVPlus(channelId) ? 'tvplus'
+            : usesGuiaDeTV(channelId) ? 'guiadetv'
+            : 'meuguia';
         const html = await fetchWithProxyFallback(url, channelId, source);
 
         if (!html) return cached || [];
@@ -362,7 +421,9 @@ export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
         // Cede o JS thread antes do parsing (previne travamento da UI)
         await yieldToUI();
 
-        const programs = source === 'guiadetv'
+        const programs = source === 'tvplus'
+            ? parseTVPlusPrograms(html, channelId)
+            : source === 'guiadetv'
             ? parseGuiadetvPrograms(html, channelId)
             : parseMeuguiaPrograms(html, channelId);
 
@@ -381,6 +442,7 @@ export async function fetchChannelEPG(channelId: string): Promise<Program[]> {
             memoryCache.set(channelId, memPrograms);
             lastFetch.set(channelId, now);
 
+            emitProgress(channelId);
             listeners.forEach(listener => listener(channelId, memPrograms));
         }
 
@@ -478,4 +540,15 @@ export async function prefetchEPG(channelIds: string[]): Promise<void> {
 /** Verifica se canal tem mapeamento EPG (sem fetch) */
 export function hasEPGMapping(channelId: string): boolean {
     return getEPGUrl(channelId) !== null;
+}
+
+/** Subscreve atualizações de progresso de carregamento EPG */
+export function onEPGProgress(listener: EPGProgressListener): () => void {
+    progressListeners.add(listener);
+    return () => progressListeners.delete(listener);
+}
+
+/** Quantos canais já têm EPG disponível no momento */
+export function getEPGLoadedCount(): number {
+    return loadedChannelIds.size;
 }

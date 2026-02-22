@@ -60,21 +60,14 @@ export function useTVKeyHandler(handler: TVKeyHandler) {
       }
     };
 
-    const keyListener = (evt: any) => {
-      listener({ ...evt, action: evt.action || 0 }); // 0 = down, 1 = up commonly
-    };
-
-    // Listen to BOTH (some remotes only fire up or down reliably)
-    // We rely on the handler to filter actions if needed, or we just pass 'up'/'down'
-    // Actually, let's map action properly.
-    // React-native-keyevent sends { keyCode, action }
-
-    DeviceEventEmitter.addListener('onKeyUp', (e) => listener({ ...e, action: 1 }));
-    DeviceEventEmitter.addListener('onKeyDown', (e) => listener({ ...e, action: 0 }));
+    // Save subscriptions so we can remove only THESE listeners on cleanup
+    // (removeAllListeners is dangerous — it nukes every listener globally)
+    const upSub   = DeviceEventEmitter.addListener('onKeyUp',   (e) => listener({ ...e, action: 1 }));
+    const downSub = DeviceEventEmitter.addListener('onKeyDown', (e) => listener({ ...e, action: 0 }));
 
     return () => {
-      DeviceEventEmitter.removeAllListeners('onKeyUp');
-      DeviceEventEmitter.removeAllListeners('onKeyDown');
+      upSub.remove();
+      downSub.remove();
     };
   }, []);
 

@@ -19,8 +19,6 @@
         "backgroundColor": "#0A0A0F"
       },
       "package": "com.saimo.tvbox",
-      "usesCleartextTraffic": true,
-      "configChanges": "keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize",
       "permissions": [
         "INTERNET"
       ]

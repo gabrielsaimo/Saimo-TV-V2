@@ -59,71 +59,71 @@ export default function DrawerLayout() {
 
       {/* Sidebar — posição absoluta para sobrepor o conteúdo ao expandir */}
       <Animated.View style={[styles.sidebar, { width: widthAnim }]}>
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <Ionicons name="tv" size={32} color={Colors.primary} />
-          {expanded && (
-            <Text style={styles.logoText}>Saimo TV</Text>
-          )}
-        </View>
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <Ionicons name="tv" size={32} color={Colors.primary} />
+            {expanded && (
+              <Text style={styles.logoText}>Saimo TV</Text>
+            )}
+          </View>
 
-        {/* Nav Items */}
-        <View style={styles.navItems}>
-          {NAV_ITEMS.map((item, index) => {
-            const active = isActive(item.route);
-            return (
-              <TVPressable
-                key={item.route}
-                style={[
-                  styles.navItem,
-                  active && styles.navItemActive,
-                  !expanded && { justifyContent: 'center', paddingHorizontal: 0 },
-                ]}
-                focusedStyle={styles.navItemFocused}
-                focusScale={1.05}
-                onPress={() => {
-                  if (item.route === '/(drawer)') {
-                    router.replace('/');
-                  } else {
-                    router.replace(item.route as any);
-                  }
-                }}
-                onFocus={() => toggleSidebar(true)}
-                onBlur={() => toggleSidebar(false)}
-                hasTVPreferredFocus={index === 0}
-              >
-                {({ focused }: { focused: boolean }) => (
-                  <>
-                    <Ionicons
-                      name={(active ? item.iconFocused : item.icon) as any}
-                      size={28}
-                      color={focused ? '#FFF' : (active ? Colors.primary : Colors.textSecondary)}
-                    />
-                    {expanded && (
-                      <Text
-                        style={[
-                          styles.navLabel,
-                          active && styles.navLabelActive,
-                          focused && { color: '#FFF' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.label}
-                      </Text>
-                    )}
-                  </>
-                )}
-              </TVPressable>
-            );
-          })}
-        </View>
+          {/* Nav Items */}
+          <View style={styles.navItems}>
+            {NAV_ITEMS.map((item, index) => {
+              const active = isActive(item.route);
+              return (
+                <TVPressable
+                  key={item.route}
+                  style={[
+                    styles.navItem,
+                    active && styles.navItemActive,
+                    !expanded && { justifyContent: 'center', paddingHorizontal: 0 },
+                  ]}
+                  focusedStyle={styles.navItemFocused}
+                  focusScale={1.05}
+                  onPress={() => {
+                    if (item.route === '/(drawer)') {
+                      router.replace('/');
+                    } else {
+                      router.replace(item.route as any);
+                    }
+                  }}
+                  onFocus={() => toggleSidebar(true)}
+                  onBlur={() => toggleSidebar(false)}
+                  hasTVPreferredFocus={index === 0}
+                >
+                  {({ focused }: { focused: boolean }) => (
+                    <>
+                      <Ionicons
+                        name={(active ? item.iconFocused : item.icon) as any}
+                        size={28}
+                        color={focused ? '#FFF' : (active ? Colors.primary : Colors.textSecondary)}
+                      />
+                      {expanded && (
+                        <Text
+                          style={[
+                            styles.navLabel,
+                            active && styles.navLabelActive,
+                            focused && { color: '#FFF' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.label}
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </TVPressable>
+              );
+            })}
+          </View>
 
-        {/* Version */}
-        <View style={styles.versionContainer}>
-          {expanded && (
-            <Text style={styles.versionText}>v1.0.0</Text>
-          )}
-        </View>
+          {/* Version */}
+          <View style={styles.versionContainer}>
+            {expanded && (
+              <Text style={styles.versionText}>v1.0.0</Text>
+            )}
+          </View>
       </Animated.View>
     </View>
   );
@@ -142,11 +142,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRightWidth: 1,
     borderRightColor: Colors.border,
-    paddingVertical: Spacing.lg,
-    justifyContent: 'space-between',
     overflow: 'hidden',
     zIndex: 100,
     elevation: 100,
+    flex: 1,
+    paddingVertical: Spacing.lg,
+    justifyContent: 'space-between',
   },
   logoContainer: {
     flexDirection: 'row',

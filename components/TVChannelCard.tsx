@@ -21,9 +21,10 @@ interface TVChannelCardProps {
   channel: Channel;
   cardWidth?: number;
   onFocused?: (id: string) => void;
+  hasTVPreferredFocus?: boolean;
 }
 
-const TVChannelCard = memo(({ channel, cardWidth, onFocused }: TVChannelCardProps) => {
+const TVChannelCard = memo(({ channel, cardWidth, onFocused, hasTVPreferredFocus }: TVChannelCardProps) => {
   const router = useRouter();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const showEPG = useSettingsStore(state => state.showEPG);
@@ -101,7 +102,13 @@ const TVChannelCard = memo(({ channel, cardWidth, onFocused }: TVChannelCardProp
 
   return (
     <View style={styles.cardWrapper}>
-    <Pressable onPress={handlePress} onLongPress={handleLongPress} onFocus={handleFocus} onBlur={handleBlur}>
+    <Pressable
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      hasTVPreferredFocus={hasTVPreferredFocus}
+    >
       <Animated.View style={[styles.container, cardWidth ? { width: cardWidth } : null, { transform: [{ scale: scaleAnim }] }, isFocused && styles.containerFocused]}>
         <View style={styles.imageContainer}>
           {channel.logo ? (
@@ -153,7 +160,10 @@ const TVChannelCard = memo(({ channel, cardWidth, onFocused }: TVChannelCardProp
     </Pressable>
     </View>
   );
-}, (prev, next) => prev.channel.id === next.channel.id);
+}, (prev, next) =>
+  prev.channel.id === next.channel.id &&
+  prev.hasTVPreferredFocus === next.hasTVPreferredFocus,
+);
 
 TVChannelCard.displayName = 'TVChannelCard';
 
