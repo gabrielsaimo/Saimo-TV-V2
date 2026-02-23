@@ -4,7 +4,7 @@ import { channels, adultChannels, categoryOrder, getChannelsByCategory } from '.
 
 interface ChannelStore {
     // Estado
-    selectedCategory: CategoryId | 'Todos' | 'Favoritos';
+    selectedCategory: CategoryId | 'Todos' | 'Favoritos' | string;
     currentChannelId: string | null;
     searchQuery: string;
     isLoading: boolean;
@@ -12,7 +12,7 @@ interface ChannelStore {
     proChannels: Channel[];
 
     // Ações
-    setCategory: (category: CategoryId | 'Todos' | 'Favoritos') => void;
+    setCategory: (category: CategoryId | 'Todos' | 'Favoritos' | string) => void;
     setCurrentChannel: (channelId: string | null) => void;
     setSearchQuery: (query: string) => void;
     setLoading: (loading: boolean) => void;
@@ -49,7 +49,7 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
     },
 
     setProList: (isPro) => {
-        set({ isProList: isPro });
+        set({ isProList: isPro, selectedCategory: 'Todos' });
     },
 
     fetchProChannels: async () => {
@@ -79,9 +79,19 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
                 : channels;
         }
 
-        // Filtro por categoria
+        // Filtro por categoria ou resolução
         if (selectedCategory === 'Favoritos') {
             allChs = allChs.filter(ch => favorites.includes(ch.id));
+        } else if (['4K', 'FHD', 'HD', 'SD'].includes(selectedCategory as string)) {
+            const res = (selectedCategory as string).toLowerCase();
+            allChs = allChs.filter(ch => {
+                const name = ch.name.toLowerCase();
+                if (res === '4k') return name.includes('4k');
+                if (res === 'fhd') return name.includes('fhd') && !name.includes('4k');
+                if (res === 'hd') return (name.includes(' hd') || name.endsWith('hd')) && !name.includes('fhd');
+                if (res === 'sd') return name.includes('sd');
+                return true;
+            });
         } else if (selectedCategory !== 'Todos') {
             allChs = allChs.filter(ch => ch.category === selectedCategory);
         }
@@ -100,16 +110,17 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
 
     getCategories: (includeAdult: boolean) => {
         const { isProList, proChannels } = get();
+        const resolutions = ['4K', 'FHD', 'HD', 'SD'];
 
         if (isProList) {
             const cats = Array.from(new Set(proChannels.map(ch => ch.category)));
             const filteredCats = includeAdult ? cats : cats.filter(c => c !== 'ADULTOS' && c !== 'Adulto');
-            return ['Todos', 'Favoritos', ...filteredCats];
+            return ['Todos', 'Favoritos', ...resolutions, ...filteredCats];
         }
 
         if (includeAdult) {
-            return ['Todos', 'Favoritos', ...categoryOrder];
+            return ['Todos', 'Favoritos', ...resolutions, ...categoryOrder];
         }
-        return ['Todos', 'Favoritos', ...categoryOrder.filter(c => c !== 'Adulto')];
+        return ['Todos', 'Favoritos', ...resolutions, ...categoryOrder.filter(c => c !== 'Adulto')];
     },
 }));

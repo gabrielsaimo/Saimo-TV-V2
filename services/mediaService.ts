@@ -73,7 +73,11 @@ export function filterMedia(
     year?: string,
 ): MediaItem[] {
     return items.filter(item => {
-        if (type && item.type !== type) return false;
+        if (type) {
+            const itemIsSeries = isSeries(item);
+            if (type === 'tv' && !itemIsSeries) return false;
+            if (type === 'movie' && itemIsSeries) return false;
+        }
         if (genre && !item.tmdb?.genres?.includes(genre)) return false;
         if (year && item.tmdb?.year !== year) return false;
         return true;

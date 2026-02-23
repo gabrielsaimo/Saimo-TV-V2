@@ -9,9 +9,9 @@ const TMDB_API_KEY = '15d2ea6d0dc1d476efbca3eba2b9bbfb';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
 
-// Cache em memória
-let trendingTodayCache: MediaItem[] | null = null;
-let trendingWeekCache: MediaItem[] | null = null;
+// Cache em memória (apenas os IDs do TMDB)
+let tmdbTodayIdsCache: number[] | null = null;
+let tmdbWeekIdsCache: number[] | null = null;
 let lastFetchToday = 0;
 let lastFetchWeek = 0;
 
@@ -65,27 +65,21 @@ function filterByLocalCatalog(tmdbIds: number[]): MediaItem[] {
 /** Tendências do dia — com cache de 30 min */
 export async function getTrendingToday(): Promise<MediaItem[]> {
   const now = Date.now();
-  if (trendingTodayCache && now - lastFetchToday < CACHE_DURATION) {
-    return trendingTodayCache;
+  if (!tmdbTodayIdsCache || now - lastFetchToday > CACHE_DURATION) {
+    tmdbTodayIdsCache = await fetchTMDBTrending('day', 5);
+    lastFetchToday = now;
   }
-  const tmdbIds = await fetchTMDBTrending('day', 5);
-  const items = filterByLocalCatalog(tmdbIds);
-  trendingTodayCache = items;
-  lastFetchToday = now;
-  return items;
+  return filterByLocalCatalog(tmdbTodayIdsCache);
 }
 
 /** Tendências da semana — com cache de 30 min */
 export async function getTrendingWeek(): Promise<MediaItem[]> {
   const now = Date.now();
-  if (trendingWeekCache && now - lastFetchWeek < CACHE_DURATION) {
-    return trendingWeekCache;
+  if (!tmdbWeekIdsCache || now - lastFetchWeek > CACHE_DURATION) {
+    tmdbWeekIdsCache = await fetchTMDBTrending('week', 5);
+    lastFetchWeek = now;
   }
-  const tmdbIds = await fetchTMDBTrending('week', 5);
-  const items = filterByLocalCatalog(tmdbIds);
-  trendingWeekCache = items;
-  lastFetchWeek = now;
-  return items;
+  return filterByLocalCatalog(tmdbWeekIdsCache);
 }
 
 /** Busca ambas em paralelo */
@@ -96,8 +90,8 @@ export async function getAllTrending(): Promise<{ today: MediaItem[]; week: Medi
 
 /** Zera o cache para forçar re-fetch na próxima chamada */
 export function clearTrendingCache(): void {
-  trendingTodayCache = null;
-  trendingWeekCache = null;
+  tmdbTodayIdsCache = null;
+  tmdbWeekIdsCache = null;
   lastFetchToday = 0;
   lastFetchWeek = 0;
 }

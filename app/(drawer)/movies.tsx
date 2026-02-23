@@ -90,6 +90,16 @@ const ADULT_CATEGORY_IDS = [
   'hot-adultos',
 ];
 
+const isAdultContent = (item: MediaItem): boolean => {
+  if (item.isAdult) return true;
+  if (ADULT_CATEGORY_IDS.includes(item.category)) return true;
+  const name = (item.tmdb?.title || item.name || '').toLowerCase();
+  
+  if (name.includes('[xxx]') || name.includes('(xxx)') || name.includes('{xxx}') || name.includes('18+')) return true;
+  if (/\bxxx\b/.test(name)) return true; // match exact word xxx but not inside words like x-men
+  return false;
+};
+
 const BG_SYNC_INTERVAL = 5000;
 const SEARCH_DEBOUNCE = 600;
 const MAX_GRID_RESULTS = 500;
@@ -150,6 +160,9 @@ export default function MoviesScreen() {
     const timeoutId = setTimeout(() => {
       try {
         let results = searchInLoadedData(debouncedQuery);
+        if (!adultUnlocked) {
+          results = results.filter(item => !isAdultContent(item));
+        }
         if (activeFilter !== 'all') results = filterMedia(results, activeFilter);
         if (activeGenre) results = filterMedia(results, undefined, activeGenre);
         if (activeSort) results = sortMedia(results, activeSort);
@@ -173,12 +186,14 @@ export default function MoviesScreen() {
     setSearchInput(text);
     isSearchActiveRef.current = !!text.trim();
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (!text.trim()) {
-      setDebouncedQuery('');
-      isSearchActiveRef.current = false;
-      const loaded = getAllLoadedCategories();
-      setCategories(loaded);
-      setTotalLoaded(getTotalLoadedCount());
+    if (!text.trim() || text.trim().length < 3) {
+      if (!text.trim()) {
+        setDebouncedQuery('');
+        isSearchActiveRef.current = false;
+        const loaded = getAllLoadedCategories();
+        setCategories(loaded);
+        setTotalLoaded(getTotalLoadedCount());
+      }
       return;
     }
     searchTimerRef.current = setTimeout(() => {
@@ -191,15 +206,6 @@ export default function MoviesScreen() {
       if (mountedRef.current) loadCatalog(false);
     });
   }, [adultUnlocked]);
-
-  const syncFromCache = useCallback(() => {
-    if (!mountedRef.current || isSearchActiveRef.current) return;
-    const now = Date.now();
-    if (now - lastSyncRef.current < BG_SYNC_INTERVAL) return;
-    lastSyncRef.current = now;
-    setCategories(getAllLoadedCategories());
-    setTotalLoaded(getTotalLoadedCount());
-  }, []);
 
   // Load trending lazily — never blocks catalog display
   const loadTrending = useCallback(async () => {
@@ -216,6 +222,16 @@ export default function MoviesScreen() {
       if (mountedRef.current) setTrendingLoading(false);
     }
   }, []);
+
+  const syncFromCache = useCallback(() => {
+    if (!mountedRef.current || isSearchActiveRef.current) return;
+    const now = Date.now();
+    if (now - lastSyncRef.current < BG_SYNC_INTERVAL) return;
+    lastSyncRef.current = now;
+    setCategories(getAllLoadedCategories());
+    setTotalLoaded(getTotalLoadedCount());
+    if (trendingLoadedRef.current) loadTrending();
+  }, [loadTrending]);
 
   // Start trending load once the first catalog batch is done (loading → false)
   useEffect(() => {
@@ -238,10 +254,11 @@ export default function MoviesScreen() {
           setCategories(getAllLoadedCategories());
           setTotalLoaded(getTotalLoadedCount());
           setBgLoading(false);
+          if (trendingLoadedRef.current) loadTrending();
         }
       });
     });
-  }, [syncFromCache]);
+  }, [syncFromCache, loadTrending]);
 
   const loadCatalog = async (isRefresh: boolean) => {
     if (!isRefresh && !catalogLoadedRef.current) await hydrateFromDisk();
@@ -312,10 +329,14 @@ export default function MoviesScreen() {
     const items = new Array<MediaItem>(total);
     let idx = 0;
     categories.forEach(catItems => {
-      for (let i = 0; i < catItems.length; i++) items[idx++] = catItems[i];
+      for (let i = 0; i < catItems.length; i++) {
+        const item = catItems[i];
+        if (!adultUnlocked && isAdultContent(item)) continue;
+        items[idx++] = item;
+      }
     });
-    return deduplicateMedia(items);
-  }, [categories]);
+    return deduplicateMedia(items.slice(0, idx));
+  }, [categories, adultUnlocked]);
 
   const genres = useMemo(() => getAllGenres(allItems), [allItems]);
 
@@ -504,7 +525,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: Colors.textSecondary, marginTop: Spacing.md, fontSize: Typography.body.fontSize },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg, paddingBottom: Spacing.md },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm, paddingBottom: Spacing.xs },
   headerLeft: { flex: 1 },
   headerRight: { flexDirection: 'row', gap: Spacing.sm },
   title: { color: Colors.text, fontSize: Typography.h1.fontSize, fontWeight: '700' },

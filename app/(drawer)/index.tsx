@@ -86,54 +86,23 @@ export default function HomeScreen() {
   // Se for lista NORMAL, passamos 'false' para carregar a parte adulta com lazy load separadamente.
   const regularChannels = getFilteredChannels(isProList ? adultUnlocked : false, favorites);
 
-  // Combina canais normais + adultos (sem aplicar o slice de performance ainda)
-  const allChannels = useMemo(() => {
-    if (isProList) return regularChannels; // A store já cuida de tudo para a PRO
-
-    let adultSlice = adultUnlocked ? adultChannelsList : [];
-
-    // Aplica filtro de categoria no slice adulto
-    if (selectedCategory === 'Favoritos') {
-      adultSlice = adultSlice.filter(ch => favorites.includes(ch.id));
-    } else if (selectedCategory !== 'Todos' && selectedCategory !== 'Adulto') {
-      adultSlice = []; // categoria não-adulta selecionada → esconde adultos
-    }
-
-    // Categoria "Adulto" → mostra só adultos da lista normal
-    if (selectedCategory === 'Adulto') return adultSlice;
-
-    return [...regularChannels, ...adultSlice];
-  }, [isProList, regularChannels, adultUnlocked, selectedCategory, favorites]);
-
+  // Combina todos os canais filtrados nativos do store (+ adultos se desbloqueado)
   const searchedChannels = useMemo(() => {
-    if (!searchQuery.trim()) return allChannels;
-    const query = searchQuery.toLowerCase().trim();
-    return allChannels.filter(ch =>
-      ch.name.toLowerCase().includes(query) ||
-      ch.category.toLowerCase().includes(query)
-    );
-  }, [allChannels, searchQuery]);
+    // getFilteredChannels já realiza TODO o filtro (categoria, search, favorites, e lista PRO/Normal) internamente.
+    return getFilteredChannels(adultUnlocked, favorites);
+  }, [getFilteredChannels, adultUnlocked, favorites, isProList, selectedCategory, searchQuery, proChannels]);
 
-  // Efeito responsável por carregar a lista progressivamente evitando travamento no Native UI
+  // Reseta o limite para 50 apenas quando usuário muda de categoria ou faz busca
   useEffect(() => {
     setDisplayLimit(50);
-    const total = searchedChannels.length;
-    if (total <= 50) return;
+  }, [selectedCategory, searchQuery, isProList]);
 
-    // Carrega blocos de 50 a cada 150ms no background
-    const interval = setInterval(() => {
-      setDisplayLimit(prev => {
-        const next = prev + 50;
-        if (next >= total) {
-          clearInterval(interval);
-          return total;
-        }
-        return next;
-      });
-    }, 150);
-
-    return () => clearInterval(interval);
-  }, [searchedChannels]);
+  // Função disparada no onEndReached para avançar a tela (paginação offline em chunks de 50)
+  const handleLoadMore = useCallback(() => {
+    if (displayLimit < searchedChannels.length) {
+      setDisplayLimit(prev => Math.min(prev + 50, searchedChannels.length));
+    }
+  }, [displayLimit, searchedChannels.length]);
 
   // Slice final para o FlatList renderizar
   const displayedChannels = useMemo(() => searchedChannels.slice(0, displayLimit), [searchedChannels, displayLimit]);
@@ -151,11 +120,16 @@ export default function HomeScreen() {
     if (idx < 0) return;
     
     // Garante que o displayLimit tenha chegado até esse item
-    setDisplayLimit(prev => Math.max(prev, idx + 10));
+    setDisplayLimit(prev => Math.max(prev, idx + 20));
 
+    // TimeOut com TryCatch: se o FlatList ainda não pintou o slice estendido, evita o "Index out of range" crash do React Native.
     const t = setTimeout(() => {
-      flatListRef.current?.scrollToIndex({ index: idx, viewPosition: 0.5, animated: false });
-    }, 150);
+      try {
+        flatListRef.current?.scrollToIndex({ index: idx, viewPosition: 0.5, animated: false });
+      } catch (err) {
+        console.log("Ignored scrollToIndex error returning from player", err);
+      }
+    }, 250);
     return () => clearTimeout(t);
   }, [lastWatchedId]));
 
@@ -269,14 +243,20 @@ export default function HomeScreen() {
         columnWrapperStyle={channelViewMode === 'grid' ? styles.gridRow : undefined}
         showsVerticalScrollIndicator={false}
         initialNumToRender={15}
-        maxToRenderPerBatch={9}
-        windowSize={8}
+        maxToRenderPerBatch={15}
+        windowSize={11}
         removeClippedSubviews
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
         onScrollToIndexFailed={({ index }) => {
           setDisplayLimit(prev => Math.max(prev, index + 20));
           setTimeout(() => {
-            flatListRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false });
-          }, 300);
+            try {
+              flatListRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false });
+            } catch (err) {
+              console.log("Ignored inner scrollToIndex error", err);
+            }
+          }, 350);
         }}
         ListFooterComponent={
           displayLimit < searchedChannels.length ? (
@@ -302,8 +282,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   subtitle: {
     color: Colors.textSecondary,
@@ -364,13 +344,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   categoryBar: {
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   categoryList: {
     paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.xs,
     gap: Spacing.sm,
   },
   categoryChip: {

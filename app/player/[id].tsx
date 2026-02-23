@@ -19,6 +19,7 @@ import TVPressable from '../../components/TVPressable';
 import { getCurrentProgram, fetchChannelEPG } from '../../services/epgService';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChannelStore } from '../../stores/channelStore';
+import { useFavoritesStore } from '../../stores/favoritesStore';
 import { getAllChannels, getChannelById } from '../../data/channels';
 import { useTVKeyHandler } from '../../hooks/useTVKeyHandler';
 import EPGGuide from '../../components/EPGGuide';
@@ -29,17 +30,14 @@ export default function TVPlayerScreen() {
   const router = useRouter();
 
   const { adultUnlocked } = useSettingsStore();
-  const { setCurrentChannel, isProList, proChannels } = useChannelStore();
+  const { favorites } = useFavoritesStore();
+  const { setCurrentChannel, getFilteredChannels } = useChannelStore();
 
-  // Combine channels dynamically based on the current active list
+  // O Player agora puxa exatamente a mesma lista filtrada (Categoria + Resolução)
+  // que o usuário estava vendo na tela anterior (TVGrid), amarrando a navegação D-pad.
   const allChannelsList = useMemo(() => {
-    if (isProList) {
-      return adultUnlocked 
-        ? proChannels 
-        : proChannels.filter(c => c.category !== 'ADULTOS' && c.category !== 'Adulto');
-    }
-    return getAllChannels(adultUnlocked);
-  }, [adultUnlocked, isProList, proChannels]);
+    return getFilteredChannels(adultUnlocked, favorites);
+  }, [getFilteredChannels, adultUnlocked, favorites]);
 
   const channel = useMemo(() => allChannelsList.find(c => c.id === currentChannelId), [allChannelsList, currentChannelId]);
 
