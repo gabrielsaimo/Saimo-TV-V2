@@ -1,11 +1,13 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../constants/Colors';
+import Updater from '../components/Updater';
 
 export default function RootLayout() {
   return (
     <>
       <StatusBar hidden />
+      <Updater />
       <Stack
         screenOptions={{
           headerShown: false,

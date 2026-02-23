@@ -22,6 +22,7 @@
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.11",
     "expo-image": "~3.0.11",
+    "expo-intent-launcher": "~13.0.8",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
     "expo-router": "~6.0.23",
@@ -50,7 +51,9 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["react-native-keyevent"]
+        "exclude": [
+          "react-native-keyevent"
+        ]
       }
     }
   }

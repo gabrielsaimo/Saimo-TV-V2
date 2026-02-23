@@ -121,7 +121,7 @@ export default function DrawerLayout() {
           {/* Version */}
           <View style={styles.versionContainer}>
             {expanded && (
-              <Text style={styles.versionText}>v1.0.0</Text>
+              <Text style={styles.versionText}>v1.0.0-Beta-V04</Text>
             )}
           </View>
       </Animated.View>

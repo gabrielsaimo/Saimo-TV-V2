@@ -2,7 +2,7 @@
   "expo": {
     "name": "Saimo TV",
     "slug": "saimo-tv-v2",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "landscape",
     "icon": "./assets/images/saimo_tv_logo.png",
     "scheme": "saimotv",
@@ -20,7 +20,8 @@
       },
       "package": "com.saimo.tvbox",
       "permissions": [
-        "INTERNET"
+        "INTERNET",
+        "REQUEST_INSTALL_PACKAGES"
       ]
     },
     "web": {
