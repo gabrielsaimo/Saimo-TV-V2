@@ -20,7 +20,6 @@ import { getCurrentProgram, fetchChannelEPG } from '../../services/epgService';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChannelStore } from '../../stores/channelStore';
 import { useFavoritesStore } from '../../stores/favoritesStore';
-import { getAllChannels, getChannelById } from '../../data/channels';
 import { useTVKeyHandler } from '../../hooks/useTVKeyHandler';
 import EPGGuide from '../../components/EPGGuide';
 
@@ -30,7 +29,7 @@ export default function TVPlayerScreen() {
   const router = useRouter();
 
   const { adultUnlocked } = useSettingsStore();
-  const { favorites } = useFavoritesStore();
+  const { favorites, toggleFavorite, isFavorite } = useFavoritesStore();
   const { setCurrentChannel, getFilteredChannels } = useChannelStore();
 
   // O Player agora puxa exatamente a mesma lista filtrada (Categoria + Resolução)
@@ -71,6 +70,10 @@ export default function TVPlayerScreen() {
   // OSD (channel info banner — shown on channel switch or OK press)
   const [osdVisible, setOsdVisible] = useState(false);
   const osdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Menu de opções do canal (Menu key)
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuFocusIdx, setMenuFocusIdx] = useState(0);
 
   const isMountedRef = useRef(true);
 
@@ -253,21 +256,48 @@ export default function TVPlayerScreen() {
   const switchRef = useRef(switchChannelByOffset);
   switchRef.current = switchChannelByOffset;
 
+  // ─── Ref estável para toggleFavorite no key handler ──────────────────
+  const toggleFavoriteRef = useRef(toggleFavorite);
+  toggleFavoriteRef.current = toggleFavorite;
+
   // ─── Key handler ──────────────────────────────────────────────────────
   const { setMode } = useTVKeyHandler((event) => {
     if (!isMountedRef.current) return;
     if (event.action === 'down') return;
 
-    // Menu key → toggle guide
+    // Botão Menu: fecha guia/menu se aberto, senão abre menu de opções
     if (event.eventType === 'menu') {
       if (showGuide) { setShowGuide(false); return; }
+      if (showMenu)  { setShowMenu(false);  return; }
       hideOSD();
-      setShowGuide(true);
+      setMenuFocusIdx(0);
+      setShowMenu(true);
       return;
     }
 
-    // Guide aberto → passa o controle pro native
+    // Guia EPG aberto → foco nativo cuida da navegação
     if (showGuide) return;
+
+    // Menu de opções aberto → D-pad navega entre itens, OK confirma
+    if (showMenu) {
+      switch (event.eventType) {
+        case 'up':
+          setMenuFocusIdx(i => (i - 1 + 2) % 2);
+          return;
+        case 'down':
+          setMenuFocusIdx(i => (i + 1) % 2);
+          return;
+        case 'select':
+          if (menuFocusIdx === 0) {
+            toggleFavoriteRef.current(currentChannelId);
+          } else {
+            setShowGuide(true);
+          }
+          setShowMenu(false);
+          return;
+      }
+      return;
+    }
 
     switch (event.eventType) {
       case 'up':
@@ -292,8 +322,10 @@ export default function TVPlayerScreen() {
 
   // ─── Refs de estado p/ BackHandler — evita re-registro com janela vazia ──
   const showGuideRef = useRef(showGuide);
+  const showMenuRef  = useRef(showMenu);
   const osdVisibleRef = useRef(osdVisible);
   useEffect(() => { showGuideRef.current = showGuide; }, [showGuide]);
+  useEffect(() => { showMenuRef.current  = showMenu;  }, [showMenu]);
   useEffect(() => { osdVisibleRef.current = osdVisible; }, [osdVisible]);
 
   const handleBack = useCallback(() => {
@@ -319,6 +351,7 @@ export default function TVPlayerScreen() {
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
       if (showGuideRef.current) { setShowGuide(false); return true; }
+      if (showMenuRef.current)  { setShowMenu(false);  return true; }
       if (osdVisibleRef.current) { hideOSD(); return true; }
       handleBack();
       return true;
@@ -530,6 +563,64 @@ export default function TVPlayerScreen() {
           </View>
         )}
       </Pressable>
+
+      {/* ── Menu de opções do canal ──────────────────────────────────── */}
+      {showMenu && !showGuide && (
+        <View style={styles.menuOverlay}>
+          <View style={styles.menuCard}>
+
+            {/* Cabeçalho: logo + nome do canal */}
+            <View style={styles.menuHeader}>
+              <View style={styles.menuLogoWrap}>
+                {channel.logo ? (
+                  <Image
+                    source={{ uri: channel.logo }}
+                    style={styles.menuLogo}
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
+                  />
+                ) : (
+                  <Ionicons name="tv-outline" size={22} color={Colors.textSecondary} />
+                )}
+              </View>
+              <Text style={styles.menuChannelName} numberOfLines={1}>{channel.name}</Text>
+            </View>
+
+            <View style={styles.menuSeparator} />
+
+            {/* Opção 0: Favoritar / Desfavoritar */}
+            <View style={[styles.menuItem, menuFocusIdx === 0 && styles.menuItemFocused]}>
+              <Ionicons
+                name={isFavorite(currentChannelId) ? 'heart' : 'heart-outline'}
+                size={22}
+                color={menuFocusIdx === 0 ? Colors.text : Colors.textSecondary}
+              />
+              <Text style={[styles.menuItemText, menuFocusIdx === 0 && styles.menuItemTextFocused]}>
+                {isFavorite(currentChannelId) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+              </Text>
+              {menuFocusIdx === 0 && (
+                <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+              )}
+            </View>
+
+            {/* Opção 1: Guia de programação */}
+            <View style={[styles.menuItem, menuFocusIdx === 1 && styles.menuItemFocused]}>
+              <Ionicons
+                name="calendar-outline"
+                size={22}
+                color={menuFocusIdx === 1 ? Colors.text : Colors.textSecondary}
+              />
+              <Text style={[styles.menuItemText, menuFocusIdx === 1 && styles.menuItemTextFocused]}>
+                Guia de Programação
+              </Text>
+              {menuFocusIdx === 1 && (
+                <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+              )}
+            </View>
+
+          </View>
+        </View>
+      )}
 
       {/* ── Guia EPG full-screen ─────────────────────────────────────── */}
       <EPGGuide
@@ -765,6 +856,81 @@ const styles = StyleSheet.create({
   osdNoEpg: {
     color: Colors.textMuted,
     fontSize: Typography.label.fontSize,
+  },
+
+  // ── Menu de opções ───────────────────────────────────────────────────
+  menuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 200,
+  },
+  menuCard: {
+    width: 360,
+    backgroundColor: 'rgba(8,8,20,0.98)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.32)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    elevation: 24,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+  },
+  menuLogoWrap: {
+    width: 52,
+    height: 34,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: BorderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  menuLogo: { width: '85%', height: '85%' },
+  menuChannelName: {
+    flex: 1,
+    color: Colors.text,
+    fontSize: Typography.h3.fontSize,
+    fontWeight: '700',
+  },
+  menuSeparator: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.xs,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    marginHorizontal: Spacing.sm,
+    marginVertical: 3,
+    borderRadius: 12,
+  },
+  menuItemFocused: {
+    backgroundColor: 'rgba(99,102,241,0.18)',
+  },
+  menuItemText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '500',
+  },
+  menuItemTextFocused: {
+    color: Colors.text,
+    fontWeight: '600',
   },
 
   // ── Badge de resolução ───────────────────────────────────────────────
